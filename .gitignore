@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Node / Next (Frontend specific ignores are in frontend/.gitignore but covering root here)
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads / generated files
+/data/uploads/
+/backend/data/uploads/
+/uploads/
+/tmp/
+/temp/
+*.log
+
+# AI / ML caches
+/.cache/
+/.huggingface/
+/.cache/huggingface/
+/models/
+/model_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
