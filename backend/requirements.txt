@@ -5,8 +5,9 @@ uvicorn
 python-multipart
 sqlalchemy[asyncio]
 alembic
-pydantic
+pydantic[email]
 pydantic-settings
+email-validator
 asyncpg
 python-dotenv
 supabase
