@@ -93,11 +93,24 @@ async def add_request_id_middleware(request: Request, call_next):
         
     return response
 
+@app.get("/")
+async def root():
+    return {
+        "status": "online",
+        "message": "Learnova API Service is running.",
+        "docs_url": "/docs",
+        "api_v1": settings.API_V1_STR
+    }
+
 # CORS
-# Milestone 1: CORS must not use unrestricted * when credentials are enabled.
+cors_origins = settings.CORS_ORIGINS if hasattr(settings, 'CORS_ORIGINS') else ["http://localhost:3000"]
+if isinstance(cors_origins, str):
+    cors_origins = [i.strip() for i in cors_origins.split(",") if i.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS if hasattr(settings, 'CORS_ORIGINS') else ["http://localhost:3000"],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
