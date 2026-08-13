@@ -16,6 +16,9 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   title: "Learnova Workspace",
   description: "AI Question Paper Generation Platform",
+  icons: {
+    icon: "/logo-light.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
