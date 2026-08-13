@@ -19,6 +19,7 @@ class QuestionResponse(BaseModel):
     source_chunk_ids: Optional[List[UUID]]
     created_at: datetime
     updated_at: datetime
+    access: Optional[dict] = None
     
     class Config:
         from_attributes = True

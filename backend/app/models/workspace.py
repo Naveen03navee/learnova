@@ -34,8 +34,9 @@ class Exam(Base):
 
 class Subject(Base):
     __tablename__ = "subjects"
+    # Tenant-aware uniqueness: exam + owner + normalized_name
     __table_args__ = (
-        UniqueConstraint('exam_id', 'normalized_name', name='uix_exam_normalized_subject'),
+        UniqueConstraint('exam_id', 'created_by', 'normalized_name', name='uix_exam_owner_normalized_subject'),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)

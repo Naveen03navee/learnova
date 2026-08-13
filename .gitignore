@@ -1,60 +1,93 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-coverage.xml
-htmlcov/
-.venv/
-venv/
-env/
+# ==========================================
+# LEARNOVA PRODUCTION GITIGNORE CONFIGURATION
+# ==========================================
 
-# Environment / secrets
+# 1. Environment & Secrets (CRITICAL SECURITY)
 .env
 .env.*
 !.env.example
+!.env.local.example
+*.pem
+*.key
+*.crt
 
-# Node / Next (Frontend specific ignores are in frontend/.gitignore but covering root here)
+# 2. Python & Virtual Environments
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+ENV/
+backend/venv/
+backend/.venv/
+
+# 3. Node.js & Next.js Frontend
 node_modules/
+**/node_modules/
 .next/
+**/.next/
 out/
+**/out/
+build/
+**/build/
 dist/
+**/dist/
 *.tsbuildinfo
+**/*.tsbuildinfo
+next-env.d.ts
+**/next-env.d.ts
+.vercel/
+**/.vercel/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Local databases
+# 4. Testing & Code Quality Caches
+.pytest_cache/
+**/.pytest_cache/
+.mypy_cache/
+**/.mypy_cache/
+.ruff_cache/
+**/.ruff_cache/
+.coverage
+**/.coverage
+coverage/
+**/coverage/
+coverage.xml
+htmlcov/
+pytest_results.txt
+
+# 5. Local Database & Runtime Uploads
 *.db
 *.sqlite
 *.sqlite3
-
-# Uploads / generated files
-/data/uploads/
-/backend/data/uploads/
-/uploads/
-/tmp/
-/temp/
+data/uploads/
+backend/data/uploads/
+uploads/
+tmp/
+temp/
 *.log
 
-# AI / ML caches
-/.cache/
+# 6. AI / ML Model Caches
+.cache/
 /.huggingface/
-/.cache/huggingface/
 /models/
 /model_cache/
 
-# OS
+# 7. OS Metadata
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# IDE
+# 8. IDE & Scratch Files
 .idea/
 .vscode/
 *.swp
 *.swo
-
-# Test artifacts
-.pytest_cache/
-.coverage
-htmlcov/
+*.sublime-project
+scratch/

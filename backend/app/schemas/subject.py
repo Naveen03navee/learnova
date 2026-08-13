@@ -23,5 +23,6 @@ class SubjectResponse(BaseModel):
     description: Optional[str] = None
     created_at: datetime
     created_by: Optional[UUID] = None
+    access: Optional[dict] = None
 
     model_config = ConfigDict(from_attributes=True)

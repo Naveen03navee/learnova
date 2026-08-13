@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from uuid import UUID
@@ -57,10 +58,49 @@ class GeneratedQuestionResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class EventType(str, Enum):
+    INFO = "INFO"
+    RUNNING = "RUNNING"
+    SUCCESS = "SUCCESS"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    GENERATION_STARTED = "GENERATION_STARTED"
+    INITIALIZING = "INITIALIZING"
+    LOADING_EMBEDDING_MODEL = "LOADING_EMBEDDING_MODEL"
+    EMBEDDING_MODEL_READY = "EMBEDDING_MODEL_READY"
+    RETRIEVING_KNOWLEDGE = "RETRIEVING_KNOWLEDGE"
+    KNOWLEDGE_RETRIEVED = "KNOWLEDGE_RETRIEVED"
+    BUILDING_CONTEXT = "BUILDING_CONTEXT"
+    PROVIDER_START = "PROVIDER_START"
+    PROVIDER_SUCCESS = "PROVIDER_SUCCESS"
+    PROVIDER_ERROR = "PROVIDER_ERROR"
+    RATE_LIMIT = "RATE_LIMIT"
+    QUOTA_EXCEEDED = "QUOTA_EXCEEDED"
+    PROVIDER_FALLBACK = "PROVIDER_FALLBACK"
+    PROVIDER_RETRY = "PROVIDER_RETRY"
+    FALLBACK_SUCCESS = "FALLBACK_SUCCESS"
+    GENERATING_BATCH = "GENERATING_BATCH"
+    VALIDATING = "VALIDATING"
+    DEDUPLICATING = "DEDUPLICATING"
+    REPAIRING = "REPAIRING"
+    BATCH_COMPLETED = "BATCH_COMPLETED"
+    GENERATION_COMPLETED = "GENERATION_COMPLETED"
+    GENERATION_FAILED = "GENERATION_FAILED"
+    CANCELLED = "CANCELLED"
+
 class GenerationEvent(BaseModel):
-    session_id: UUID
-    status: GenerationStatus
+    session_id: Optional[UUID] = None
+    resource_id: Optional[UUID] = None
+    event_type: EventType = EventType.INFO
+    operation: str = "generation"
+    status: str
+    provider: Optional[str] = None
+    model: Optional[str] = None
     message: str
-    progress: float = 0.0 # 0.0 to 1.0
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    progress: float = 0.0
+    retry_after_seconds: Optional[int] = None
+    retry_at: Optional[datetime] = None
     batch: Optional[int] = None
     total_batches: Optional[int] = None
+    metadata: Optional[Dict[str, Any]] = None

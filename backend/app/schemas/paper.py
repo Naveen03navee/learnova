@@ -31,6 +31,7 @@ class QuestionPaperSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
     items: List[QuestionPaperItemSchema] = []
+    access: Optional[dict] = None
 
     model_config = ConfigDict(from_attributes=True)
     

@@ -21,15 +21,27 @@ class OllamaProvider(BaseAIProvider):
     def __init__(self, model: str = "qwen2.5:7b"):
         self.model = model
         self.base_url = settings.OLLAMA_BASE_URL.rstrip('/') if settings.OLLAMA_BASE_URL else None
+        # Reusable client — created once per Python process/worker.
+        # Connection pooling and keep-alive are managed by httpx internally.
+        # NOTE: On Render, each gunicorn worker has its own client instance;
+        # the client is NOT shared across processes.
+        self._client = httpx.AsyncClient(
+            timeout=settings.PROVIDER_TIMEOUT_SECONDS,
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+        )
+
+    async def aclose(self) -> None:
+        """Gracefully drain and close the underlying connection pool."""
+        await self._client.aclose()
 
     @property
     def provider_name(self) -> str:
         return "ollama"
 
-    async def _check_availability(self, client: httpx.AsyncClient):
+    async def _check_availability(self):
         """Pings the Ollama server to ensure it is running."""
         try:
-            res = await client.get(f"{self.base_url}/api/version", timeout=3.0)
+            res = await self._client.get(f"{self.base_url}/api/version", timeout=3.0)
             res.raise_for_status()
         except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError):
             raise ProviderUnavailableError(f"Ollama server is unreachable at {self.base_url}")
@@ -54,19 +66,18 @@ class OllamaProvider(BaseAIProvider):
             }
         }
 
-        async with httpx.AsyncClient(timeout=settings.PROVIDER_TIMEOUT_SECONDS) as client:
-            # 1. Ensure Ollama is running before starting generation
-            await self._check_availability(client)
+        # 1. Ensure Ollama is running before starting generation
+        await self._check_availability()
 
-            # 2. Call the chat endpoint
-            try:
-                response = await client.post(f"{self.base_url}/api/chat", json=payload)
-            except httpx.TimeoutException:
-                raise TimeoutError("Ollama request timed out.")
-            except httpx.ConnectError:
-                raise ProviderUnavailableError("Lost connection to Ollama server.")
-            except Exception as e:
-                raise UnknownProviderError(f"Unexpected network error with Ollama: {e}")
+        # 2. Call the chat endpoint
+        try:
+            response = await self._client.post(f"{self.base_url}/api/chat", json=payload)
+        except httpx.TimeoutException:
+            raise TimeoutError("Ollama request timed out.")
+        except httpx.ConnectError:
+            raise ProviderUnavailableError("Lost connection to Ollama server.")
+        except Exception as e:
+            raise UnknownProviderError(f"Unexpected network error with Ollama: {e}")
 
         # 3. Handle response
         if response.status_code == 404:
@@ -98,3 +109,4 @@ class OllamaProvider(BaseAIProvider):
             parsed_output=parsed_data,
             raw_response=data
         )
+

@@ -13,6 +13,8 @@ class TestSemanticDeduplicator(unittest.IsolatedAsyncioTestCase):
         mock_embed.return_value = [0.1] * 384
         
         mock_db = MagicMock()
+        mock_db.commit = AsyncMock()
+        mock_db.refresh = AsyncMock()
         mock_db.execute = AsyncMock()
         
         # Simulate no duplicates found
@@ -31,6 +33,8 @@ class TestSemanticDeduplicator(unittest.IsolatedAsyncioTestCase):
         mock_embed.return_value = [0.1] * 384
         
         mock_db = MagicMock()
+        mock_db.commit = AsyncMock()
+        mock_db.refresh = AsyncMock()
         mock_db.execute = AsyncMock()
         
         # Simulate found in GeneratedQuestion
@@ -46,3 +50,7 @@ class TestSemanticDeduplicator(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+
+

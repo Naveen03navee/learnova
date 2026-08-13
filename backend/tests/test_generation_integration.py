@@ -1,6 +1,11 @@
 import pytest
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from httpx import AsyncClient
 from uuid import uuid4
+import uuid
 import json
 from unittest.mock import patch, MagicMock, AsyncMock
 
@@ -44,13 +49,38 @@ async def test_generation_start_context_mismatch(mock_get_db):
     
     mock_db = AsyncMock()
     pattern = get_mock_pattern(exam_id=MOCK_OTHER_EXAM_ID) # Different exam
+    user_id = str(uuid4())
+    
+    class MockExam:
+        id = MOCK_EXAM_ID
+        created_by = None
+        
+    class MockSubject:
+        id = MOCK_SUBJECT_ID
+        exam_id = MOCK_EXAM_ID
+        created_by = user_id
+        
+    async def mock_get(model, id):
+        if model.__name__ == 'Exam':
+            return MockExam()
+        if model.__name__ == 'Subject':
+            return MockSubject()
+        return None
+        
+    mock_db.get = AsyncMock(side_effect=mock_get)
     
     # Mock pattern fetch
     async def mock_execute(stmt):
         class MockResult:
-            def scalar_one_or_none(self): return pattern
+            def scalar_one_or_none(self):
+                stmt_str = str(stmt).lower()
+                if "created_by" in stmt_str and "subject" in stmt_str:
+                    return uuid.UUID(user_id)
+                if "share_permission" in stmt_str:
+                    return None
+                return pattern
         return MockResult()
-    mock_db.execute = mock_execute
+    mock_db.execute = AsyncMock(side_effect=mock_execute)
     
     req = GenerationStartRequest(
         exam_id=MOCK_EXAM_ID,
@@ -65,7 +95,7 @@ async def test_generation_start_context_mismatch(mock_get_db):
     
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as exc:
-        await start_generation(req, MagicMock(), mock_db)
+        await start_generation(req, MagicMock(), mock_db, user_id=user_id)
     
     assert exc.value.status_code == 400
     assert "Exam pattern does not match" in str(exc.value.detail)
@@ -78,12 +108,37 @@ async def test_generation_start_inactive_pattern(mock_get_db):
     
     mock_db = AsyncMock()
     pattern = get_mock_pattern(status=PatternStatus.FAILED)
+    user_id = str(uuid4())
+    
+    class MockExam:
+        id = MOCK_EXAM_ID
+        created_by = None
+        
+    class MockSubject:
+        id = MOCK_SUBJECT_ID
+        exam_id = MOCK_EXAM_ID
+        created_by = user_id
+        
+    async def mock_get(model, id):
+        if model.__name__ == 'Exam':
+            return MockExam()
+        if model.__name__ == 'Subject':
+            return MockSubject()
+        return None
+        
+    mock_db.get = AsyncMock(side_effect=mock_get)
     
     async def mock_execute(stmt):
         class MockResult:
-            def scalar_one_or_none(self): return pattern
+            def scalar_one_or_none(self):
+                stmt_str = str(stmt).lower()
+                if "created_by" in stmt_str and "subject" in stmt_str:
+                    return uuid.UUID(user_id)
+                if "share_permission" in stmt_str:
+                    return None
+                return pattern
         return MockResult()
-    mock_db.execute = mock_execute
+    mock_db.execute = AsyncMock(side_effect=mock_execute)
     
     req = GenerationStartRequest(
         exam_id=MOCK_EXAM_ID,
@@ -98,7 +153,7 @@ async def test_generation_start_inactive_pattern(mock_get_db):
     
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as exc:
-        await start_generation(req, MagicMock(), mock_db)
+        await start_generation(req, MagicMock(), mock_db, user_id=user_id)
         
     assert exc.value.status_code == 400
     assert "must be ACTIVE" in str(exc.value.detail)
@@ -112,13 +167,38 @@ async def test_llm_not_called_on_mismatch(mock_generate, mock_get_db):
     
     mock_db = AsyncMock()
     pattern = get_mock_pattern(exam_id=MOCK_OTHER_EXAM_ID) # Different exam
+    user_id = str(uuid4())
+    
+    class MockExam:
+        id = MOCK_EXAM_ID
+        created_by = None
+        
+    class MockSubject:
+        id = MOCK_SUBJECT_ID
+        exam_id = MOCK_EXAM_ID
+        created_by = user_id
+        
+    async def mock_get(model, id):
+        if model.__name__ == 'Exam':
+            return MockExam()
+        if model.__name__ == 'Subject':
+            return MockSubject()
+        return None
+        
+    mock_db.get = AsyncMock(side_effect=mock_get)
     
     # Mock pattern fetch
     async def mock_execute(stmt):
         class MockResult:
-            def scalar_one_or_none(self): return pattern
+            def scalar_one_or_none(self):
+                stmt_str = str(stmt).lower()
+                if "created_by" in stmt_str and "subject" in stmt_str:
+                    return uuid.UUID(user_id)
+                if "share_permission" in stmt_str:
+                    return None
+                return pattern
         return MockResult()
-    mock_db.execute = mock_execute
+    mock_db.execute = AsyncMock(side_effect=mock_execute)
     
     req = GenerationStartRequest(
         exam_id=MOCK_EXAM_ID,
@@ -133,7 +213,7 @@ async def test_llm_not_called_on_mismatch(mock_generate, mock_get_db):
     
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as exc:
-        await start_generation(req, MagicMock(), mock_db)
+        await start_generation(req, MagicMock(), mock_db, user_id=user_id)
     
     assert exc.value.status_code == 400
     mock_generate.assert_not_called()
@@ -165,7 +245,7 @@ async def test_no_pattern_generation(mock_db_cls, mock_retrieve, mock_generate):
         class MockResult:
             def scalar_one_or_none(self): return None
             def all(self): return []
-            def first(self): return (mock_session, "Mock Exam", "Mock Subject")
+            def first(self): return (mock_session, exam, subject)
         return MockResult()
         
     mock_db.execute = mock_execute
@@ -228,8 +308,9 @@ async def test_orchestrator_prompt_and_isolation(mock_db_cls, mock_retrieve, moc
         # We need to simulate the DB execute for session and pattern loading
         async def mock_execute(stmt):
             class MockResult:
-                def first(self): return (mock_session, "Exam", "Subj")
+                def first(self): return (mock_session, exam, subject)
                 def scalar_one_or_none(self): return pattern
+                def all(self): return []
             return MockResult()
             
         mock_db.execute = mock_execute
@@ -269,10 +350,14 @@ async def test_constraint_validation(mock_db_cls, mock_retrieve):
     
     mock_retrieve.return_value = MagicMock(results=[MagicMock(content="Knowledge base text.")])
     
+    exam = Exam(id=MOCK_EXAM_ID, name="Mock Exam")
+    subject = Subject(id=MOCK_SUBJECT_ID, name="Mock Subject")
+    
     async def mock_execute(stmt):
         class MockResult:
-            def first(self): return (mock_session, "Exam", "Subj")
+            def first(self): return (mock_session, exam, subject)
             def scalar_one_or_none(self): return None # No pattern
+            def all(self): return []
         return MockResult()
     mock_db.execute = mock_execute
     
@@ -289,4 +374,8 @@ async def test_constraint_validation(mock_db_cls, mock_retrieve):
         
         # Ensure it attempted to retry (called generate multiple times because validation failed)
         assert mock_ai_generate.call_count > 1
+
+
+
+
 

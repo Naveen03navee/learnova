@@ -94,7 +94,12 @@ class GeminiProvider(BaseAIProvider):
             if err_code == 401 or err_code == 403:
                 raise AuthenticationError(f"Gemini authentication failed: {e.message}")
             elif err_code == 429:
-                raise RateLimitError(f"Gemini rate limit exceeded: {e.message}")
+                msg_text = e.message.lower()
+                quota_exhausted = "quota" in msg_text
+                raise RateLimitError(
+                    f"Gemini rate limit exceeded",
+                    quota_exhausted=quota_exhausted
+                )
             elif err_code == 400:
                 raise InvalidRequestError(f"Invalid request to Gemini: {e.message}")
             elif err_code >= 500:

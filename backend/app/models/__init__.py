@@ -7,5 +7,6 @@ from app.models.paper import QuestionPaper, QuestionPaperItem
 from app.models.pattern import ExamPattern
 from app.models.pattern_chunk import PatternChunk
 from app.models.history import ActivityLog
+from app.models.sharing import SharePermission
 
 # This file is imported by env.py so Alembic finds all models

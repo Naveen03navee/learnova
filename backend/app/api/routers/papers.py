@@ -3,27 +3,49 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+from sqlalchemy import or_, and_
 from uuid import UUID
 from typing import List, Optional
 import re
+import uuid
 
 from app.core.database import get_db
 from app.models.paper import QuestionPaper, QuestionPaperItem, PaperStatus
 from app.models.question import Question
+from app.models.workspace import Exam, Subject
+from app.models.sharing import SharePermission
 from app.schemas.paper import QuestionPaperSchema, ReorderItemRequest, SwapItemRequest, ApprovePaperRequest
 from app.services.paper.schemas import PaperBlueprint
 from app.services.paper.builder import build_question_paper
 from app.services.export.docx_exporter import export_question_paper_docx
+from app.services.export.question_paper_exporter_pdf import export_question_paper_pdf
 from app.services.export.answer_key_exporter import export_answer_key_pdf
+from app.api.deps import get_current_user
+from app.core.authorization import require_view_access, require_edit_access, require_owner_access, get_entity_access
+import io
+import zipfile
 
 router = APIRouter(prefix="/api/v1", tags=["papers"])
 
 @router.post("/papers/build", response_model=QuestionPaperSchema)
-async def build_paper(blueprint: PaperBlueprint, db: AsyncSession = Depends(get_db)):
+async def build_paper(
+    blueprint: PaperBlueprint, 
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    user_uuid = uuid.UUID(user_id)
+    exam = await db.get(Exam, blueprint.exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+        
+    if blueprint.subject_id:
+        await require_edit_access(db, "subject", blueprint.subject_id, user_uuid)
+    else:
+        await require_edit_access(db, "exam", blueprint.exam_id, user_uuid)
+        
     try:
         paper = await build_question_paper(db, blueprint)
         
-        # Load relationships for response
         result = await db.execute(
             select(QuestionPaper)
             .options(selectinload(QuestionPaper.items))
@@ -46,9 +68,24 @@ async def list_papers(
     exam_id: Optional[UUID] = None,
     subject_id: Optional[UUID] = None,
     status: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user)
 ):
-    query = select(QuestionPaper).options(selectinload(QuestionPaper.items)).order_by(QuestionPaper.created_at.desc())
+    user_uuid = uuid.UUID(user_id)
+    
+    query = select(QuestionPaper).options(selectinload(QuestionPaper.items)).join(Exam, QuestionPaper.exam_id == Exam.id).join(Subject, QuestionPaper.subject_id == Subject.id).outerjoin(
+        SharePermission, and_(
+            SharePermission.entity_id == QuestionPaper.id,
+            SharePermission.entity_type == "paper",
+            SharePermission.shared_with_id == user_uuid
+        )
+    ).where(
+        or_(
+            Subject.created_by == user_uuid,
+            SharePermission.id != None
+        )
+    ).order_by(QuestionPaper.created_at.desc())
+    
     if exam_id:
         query = query.where(QuestionPaper.exam_id == exam_id)
     if subject_id:
@@ -57,10 +94,25 @@ async def list_papers(
         query = query.where(QuestionPaper.status == status)
         
     result = await db.execute(query)
-    return result.scalars().all()
+    papers = result.scalars().all()
+    
+    response = []
+    for paper in papers:
+        access = await get_entity_access(db, "paper", paper.id, user_uuid)
+        p_dict = paper.__dict__.copy()
+        p_dict['access'] = access
+        response.append(p_dict)
+        
+    return response
 
 @router.get("/papers/{paper_id}", response_model=QuestionPaperSchema)
-async def get_paper(paper_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_paper(
+    paper_id: UUID, 
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    await require_view_access(db, "paper", paper_id, uuid.UUID(user_id))
+    
     result = await db.execute(
         select(QuestionPaper)
         .options(selectinload(QuestionPaper.items))
@@ -69,10 +121,21 @@ async def get_paper(paper_id: UUID, db: AsyncSession = Depends(get_db)):
     paper = result.scalar_one_or_none()
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
-    return paper
+        
+    access = await get_entity_access(db, "paper", paper_id, uuid.UUID(user_id))
+    p_dict = paper.__dict__.copy()
+    p_dict['access'] = access
+    return p_dict
 
 @router.put("/papers/{paper_id}/items/reorder", response_model=QuestionPaperSchema)
-async def reorder_items(paper_id: UUID, req: List[ReorderItemRequest], db: AsyncSession = Depends(get_db)):
+async def reorder_items(
+    paper_id: UUID, 
+    req: List[ReorderItemRequest], 
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    await require_edit_access(db, "paper", paper_id, uuid.UUID(user_id))
+    
     result = await db.execute(
         select(QuestionPaper)
         .options(selectinload(QuestionPaper.items))
@@ -86,7 +149,6 @@ async def reorder_items(paper_id: UUID, req: List[ReorderItemRequest], db: Async
     if paper.status != PaperStatus.DRAFT:
         raise HTTPException(status_code=400, detail="Only DRAFT papers can be modified")
         
-    # Map items by id
     item_map = {item.id: item for item in paper.items}
     
     for r in req:
@@ -96,7 +158,6 @@ async def reorder_items(paper_id: UUID, req: List[ReorderItemRequest], db: Async
     paper.quality_report_stale = True
     await db.commit()
     
-    # Reload
     result = await db.execute(
         select(QuestionPaper)
         .options(selectinload(QuestionPaper.items))
@@ -105,36 +166,38 @@ async def reorder_items(paper_id: UUID, req: List[ReorderItemRequest], db: Async
     return result.scalar_one()
 
 @router.put("/papers/{paper_id}/items/{item_id}/swap", response_model=QuestionPaperSchema)
-async def swap_item(paper_id: UUID, item_id: UUID, req: SwapItemRequest, db: AsyncSession = Depends(get_db)):
-    # 1. Verify paper is draft
+async def swap_item(
+    paper_id: UUID, 
+    item_id: UUID, 
+    req: SwapItemRequest, 
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    await require_edit_access(db, "paper", paper_id, uuid.UUID(user_id))
+    
     result = await db.execute(select(QuestionPaper).where(QuestionPaper.id == paper_id))
     paper = result.scalar_one_or_none()
     if not paper or paper.status != PaperStatus.DRAFT:
         raise HTTPException(status_code=400, detail="Paper not found or not in DRAFT status")
         
-    # 2. Get item
     result = await db.execute(select(QuestionPaperItem).where(QuestionPaperItem.id == item_id, QuestionPaperItem.paper_id == paper_id))
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
         
-    # 3. Get new question
     result = await db.execute(select(Question).where(Question.id == req.new_question_id))
     new_q = result.scalar_one_or_none()
     if not new_q:
         raise HTTPException(status_code=404, detail="New question not found")
         
-    # 4. Update snapshot and reference
     item.question_id = new_q.id
     item.question_text_snapshot = new_q.question_text
     item.content_snapshot = new_q.content
     item.marks_snapshot = new_q.marks
-    # keep existing marks_override, section, and order_index
     
     paper.quality_report_stale = True
     await db.commit()
     
-    # Return updated paper
     result = await db.execute(
         select(QuestionPaper)
         .options(selectinload(QuestionPaper.items))
@@ -143,12 +206,17 @@ async def swap_item(paper_id: UUID, item_id: UUID, req: SwapItemRequest, db: Asy
     return result.scalar_one()
 
 @router.post("/papers/{paper_id}/items/{item_id}/auto-replace", response_model=QuestionPaperSchema)
-async def auto_replace_item(paper_id: UUID, item_id: UUID, db: AsyncSession = Depends(get_db)):
-    from sqlalchemy import and_
+async def auto_replace_item(
+    paper_id: UUID, 
+    item_id: UUID, 
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    await require_edit_access(db, "paper", paper_id, uuid.UUID(user_id))
+    
     from app.services.paper.builder import select_single_replacement
     import numpy as np
     
-    # 1. Verify paper is draft
     result = await db.execute(
         select(QuestionPaper)
         .options(selectinload(QuestionPaper.items))
@@ -158,7 +226,6 @@ async def auto_replace_item(paper_id: UUID, item_id: UUID, db: AsyncSession = De
     if not paper or paper.status != PaperStatus.DRAFT:
         raise HTTPException(status_code=400, detail="Paper not found or not in DRAFT status")
         
-    # 2. Get item
     target_item = None
     for item in paper.items:
         if item.id == item_id:
@@ -168,7 +235,6 @@ async def auto_replace_item(paper_id: UUID, item_id: UUID, db: AsyncSession = De
     if not target_item:
         raise HTTPException(status_code=404, detail="Item not found")
         
-    # 3. Find blueprint requirements for this section
     section_config = None
     for sec in paper.config.get("sections", []):
         if sec["name"] == target_item.section_name:
@@ -178,9 +244,6 @@ async def auto_replace_item(paper_id: UUID, item_id: UUID, db: AsyncSession = De
     if not section_config:
         raise HTTPException(status_code=400, detail="Section configuration not found in blueprint")
         
-    # 4. Find candidates from Question Bank
-    # We need questions for the same exam, subject, difficulty, type
-    # EXCLUDING questions already in the paper.
     existing_question_ids = [i.question_id for i in paper.items if i.question_id is not None]
     
     filters = [
@@ -200,28 +263,23 @@ async def auto_replace_item(paper_id: UUID, item_id: UUID, db: AsyncSession = De
     if not candidates:
         raise HTTPException(status_code=404, detail="No suitable replacement questions available in the bank.")
         
-    # 5. Extract existing embeddings to run MMR
     existing_embeddings = []
-    # We need to fetch the embeddings for the existing questions from the DB
     if existing_question_ids:
         eq_res = await db.execute(select(Question).where(Question.id.in_(existing_question_ids)))
         eqs = eq_res.scalars().all()
         for eq in eqs:
-            if eq.embedding:
+            if eq.embedding is not None:
                 existing_embeddings.append(np.array(eq.embedding))
                 
-    # 6. Run MMR selection
     best_candidate = select_single_replacement(candidates, existing_embeddings)
     
     if not best_candidate:
         raise HTTPException(status_code=404, detail="Could not select a replacement.")
         
-    # 7. Update snapshot and reference
     target_item.question_id = best_candidate.id
     target_item.question_text_snapshot = best_candidate.question_text
     target_item.content_snapshot = best_candidate.content
     target_item.marks_snapshot = best_candidate.marks
-    # keep existing marks_override, section, and order_index
     
     paper.quality_report_stale = True
     await db.commit()
@@ -234,7 +292,14 @@ async def auto_replace_item(paper_id: UUID, item_id: UUID, db: AsyncSession = De
     return result.scalar_one()
 
 @router.post("/papers/{paper_id}/approve", response_model=QuestionPaperSchema)
-async def approve_paper(paper_id: UUID, req: ApprovePaperRequest, db: AsyncSession = Depends(get_db)):
+async def approve_paper(
+    paper_id: UUID, 
+    req: ApprovePaperRequest, 
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    await require_edit_access(db, "paper", paper_id, uuid.UUID(user_id))
+    
     result = await db.execute(
         select(QuestionPaper)
         .options(selectinload(QuestionPaper.items))
@@ -247,13 +312,11 @@ async def approve_paper(paper_id: UUID, req: ApprovePaperRequest, db: AsyncSessi
     if paper.status != PaperStatus.DRAFT:
         raise HTTPException(status_code=400, detail=f"Paper is already {paper.status}")
         
-    # 1. Structural Validation
     from app.services.paper.validator import validate_structural_integrity
     structural_errors = validate_structural_integrity(paper)
     if structural_errors:
         raise HTTPException(status_code=400, detail={"message": "Structural validation failed", "errors": structural_errors})
         
-    # 2. AI Quality Check Verification
     if paper.quality_report_stale:
         raise HTTPException(status_code=400, detail="AI Quality Check is stale. Please re-run the check before approving.")
         
@@ -277,7 +340,13 @@ async def approve_paper(paper_id: UUID, req: ApprovePaperRequest, db: AsyncSessi
     return result.scalar_one()
 
 @router.post("/papers/{paper_id}/quality-check", response_model=QuestionPaperSchema)
-async def quality_check_paper(paper_id: UUID, db: AsyncSession = Depends(get_db)):
+async def quality_check_paper(
+    paper_id: UUID, 
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    await require_edit_access(db, "paper", paper_id, uuid.UUID(user_id))
+    
     from app.services.paper.quality_checker import run_paper_quality_check
     from app.core.logging import get_logger
     from app.core.request_context import set_paper_id
@@ -300,7 +369,6 @@ async def quality_check_paper(paper_id: UUID, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=500, detail=str(e))
 
 def _sanitize_filename(name: str) -> str:
-    # Remove invalid characters
     return re.sub(r'[\\/*?:"<>|]', "", name).replace(" ", "_")
 
 def _get_export_filenames(paper) -> tuple[str, str, str]:
@@ -316,10 +384,28 @@ def _get_export_filenames(paper) -> tuple[str, str, str]:
         f"{base_name}-Package.zip"
     )
 
-from app.api.deps import get_current_user
-from app.models.workspace import Exam
-import io
-import zipfile
+
+@router.get("/papers/{paper_id}/export/question_paper/pdf")
+async def export_paper_question_paper_pdf(
+    paper_id: UUID, 
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    paper = await _get_paper_for_export(db, paper_id, user_id)
+    if paper.status != PaperStatus.APPROVED:
+        raise HTTPException(status_code=400, detail="Only APPROVED papers can be exported.")
+        
+    try:
+        buffer = export_question_paper_pdf(paper)
+        paper_filename, _, _ = _get_export_filenames(paper)
+        
+        return StreamingResponse(
+            iter([buffer.getvalue()]),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{paper_filename}.pdf"'}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/papers/{paper_id}/export/docx")
 async def export_paper_docx(
@@ -327,8 +413,7 @@ async def export_paper_docx(
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    import uuid
-    user_uuid = uuid.UUID(user_id)
+    await require_view_access(db, "paper", paper_id, uuid.UUID(user_id))
     
     result = await db.execute(
         select(QuestionPaper)
@@ -339,12 +424,6 @@ async def export_paper_docx(
     
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
-        
-    # Validate Context Ownership
-    exam_result = await db.execute(select(Exam).where(Exam.id == paper.exam_id))
-    exam = exam_result.scalar_one_or_none()
-    if not exam or (exam.created_by is not None and exam.created_by != user_uuid):
-        raise HTTPException(status_code=403, detail="Not authorized to access this paper")
         
     if paper.status != PaperStatus.APPROVED:
         raise HTTPException(status_code=400, detail="Only APPROVED papers can be exported.")
@@ -368,8 +447,7 @@ async def export_paper_answer_key_pdf(
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    import uuid
-    user_uuid = uuid.UUID(user_id)
+    await require_view_access(db, "paper", paper_id, uuid.UUID(user_id))
     
     result = await db.execute(
         select(QuestionPaper)
@@ -381,12 +459,6 @@ async def export_paper_answer_key_pdf(
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
         
-    # Validate Context Ownership
-    exam_result = await db.execute(select(Exam).where(Exam.id == paper.exam_id))
-    exam = exam_result.scalar_one_or_none()
-    if not exam or (exam.created_by is not None and exam.created_by != user_uuid):
-        raise HTTPException(status_code=403, detail="Not authorized to access this paper")
-        
     if paper.status != PaperStatus.APPROVED:
         raise HTTPException(status_code=400, detail="Only APPROVED papers can be exported.")
         
@@ -394,7 +466,6 @@ async def export_paper_answer_key_pdf(
         buffer = export_answer_key_pdf(paper)
         _, key_filename, _ = _get_export_filenames(paper)
         
-        # Make sure the extension ends with .pdf
         if key_filename.endswith('.docx'):
             key_filename = key_filename.replace('.docx', '.pdf')
             
@@ -414,8 +485,7 @@ async def export_paper_package_zip(
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    import uuid
-    user_uuid = uuid.UUID(user_id)
+    await require_view_access(db, "paper", paper_id, uuid.UUID(user_id))
     
     result = await db.execute(
         select(QuestionPaper)
@@ -426,12 +496,6 @@ async def export_paper_package_zip(
     
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
-        
-    # Validate Context Ownership
-    exam_result = await db.execute(select(Exam).where(Exam.id == paper.exam_id))
-    exam = exam_result.scalar_one_or_none()
-    if not exam or (exam.created_by is not None and exam.created_by != user_uuid):
-        raise HTTPException(status_code=403, detail="Not authorized to access this paper")
         
     if paper.status != PaperStatus.APPROVED:
         raise HTTPException(status_code=400, detail="Only APPROVED papers can be exported.")
@@ -459,3 +523,21 @@ async def export_paper_package_zip(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/papers/{paper_id}/quality-check/stream")
+async def stream_quality_check_progress(
+    paper_id: UUID,
+    user_id: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    await require_view_access(db, "paper", paper_id, uuid.UUID(user_id))
+    from app.services.generation.events import event_stream
+    return StreamingResponse(
+        event_stream(paper_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )

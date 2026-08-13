@@ -17,7 +17,7 @@ from app.models.generation import GeneratedQuestion, ApprovalStatus, GenerationS
 from app.models.question import Question
 
 app = FastAPI()
-app.include_router(generation.router, prefix="/api/v1")
+app.include_router(generation.router)
 
 class TestQuestionApprovalTransaction(unittest.TestCase):
     def setUp(self):
@@ -49,8 +49,33 @@ class TestQuestionApprovalTransaction(unittest.TestCase):
         mock_session.difficulty = "Easy"
         mock_session.marks = 1
         
-        mock_result.first.return_value = (mock_gen_question, mock_session)
-        mock_db.execute.return_value = mock_result
+        user_id = str(uuid4())
+        mock_exam = MagicMock()
+        mock_exam.id = mock_session.exam_id
+        mock_result.first.return_value = (mock_gen_question, mock_session, mock_exam)
+        
+        class MockExamObj:
+            id = mock_session.exam_id
+            created_by = None
+        async def mock_get(model, id):
+            if model.__name__ == 'Exam': return MockExamObj()
+            return None
+        mock_db.get = AsyncMock(side_effect=mock_get)
+        
+        async def mock_execute(stmt, *args, **kwargs):
+            stmt_str = str(stmt).lower()
+            mock_res = MagicMock()
+            if "subjects.created_by" in stmt_str:
+                import uuid
+                mock_res.scalar_one_or_none.return_value = uuid.UUID(user_id)
+            elif "select subject.exam_id" in stmt_str:
+                mock_res.scalar_one_or_none.return_value = mock_session.exam_id
+            elif "sharepermission" in stmt_str:
+                mock_res.scalar_one_or_none.return_value = None
+            else:
+                return mock_result
+            return mock_res
+        mock_db.execute = AsyncMock(side_effect=mock_execute)
         
         # Make db.commit raise an exception to trigger the rollback
         mock_db.commit.side_effect = Exception("DB Connection Lost")
@@ -58,7 +83,12 @@ class TestQuestionApprovalTransaction(unittest.TestCase):
         async def override_get_db():
             yield mock_db
             
+        async def override_get_current_user():
+            return user_id
+            
         app.dependency_overrides[get_db] = override_get_db
+        from app.api.deps import get_current_user
+        app.dependency_overrides[get_current_user] = override_get_current_user
         
         response = self.client.post(f"/api/v1/generation/questions/{mock_gen_question.id}/approve")
         
@@ -71,6 +101,7 @@ class TestQuestionApprovalTransaction(unittest.TestCase):
         
         # Clean up
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
     @patch('app.api.routers.generation.AsyncSession')
     def test_approval_transaction_success(self, mock_session_cls):
@@ -95,8 +126,33 @@ class TestQuestionApprovalTransaction(unittest.TestCase):
         mock_session.difficulty = "Easy"
         mock_session.marks = 1
         
-        mock_result.first.return_value = (mock_gen_question, mock_session)
-        mock_db.execute.return_value = mock_result
+        user_id = str(uuid4())
+        mock_exam = MagicMock()
+        mock_exam.id = mock_session.exam_id
+        mock_result.first.return_value = (mock_gen_question, mock_session, mock_exam)
+        
+        class MockExamObj:
+            id = mock_session.exam_id
+            created_by = None
+        async def mock_get(model, id):
+            if model.__name__ == 'Exam': return MockExamObj()
+            return None
+        mock_db.get = AsyncMock(side_effect=mock_get)
+        
+        async def mock_execute(stmt, *args, **kwargs):
+            stmt_str = str(stmt).lower()
+            mock_res = MagicMock()
+            if "subjects.created_by" in stmt_str:
+                import uuid
+                mock_res.scalar_one_or_none.return_value = uuid.UUID(user_id)
+            elif "select subject.exam_id" in stmt_str:
+                mock_res.scalar_one_or_none.return_value = mock_session.exam_id
+            elif "sharepermission" in stmt_str:
+                mock_res.scalar_one_or_none.return_value = None
+            else:
+                return mock_result
+            return mock_res
+        mock_db.execute = AsyncMock(side_effect=mock_execute)
         
         # commit succeeds
         mock_db.commit.return_value = None
@@ -104,7 +160,12 @@ class TestQuestionApprovalTransaction(unittest.TestCase):
         async def override_get_db():
             yield mock_db
             
+        async def override_get_current_user():
+            return user_id
+            
         app.dependency_overrides[get_db] = override_get_db
+        from app.api.deps import get_current_user
+        app.dependency_overrides[get_current_user] = override_get_current_user
         
         response = self.client.post(f"/api/v1/generation/questions/{mock_gen_question.id}/approve")
         
@@ -123,6 +184,11 @@ class TestQuestionApprovalTransaction(unittest.TestCase):
         
         # Clean up
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
 if __name__ == '__main__':
     unittest.main()
+
+
+
+

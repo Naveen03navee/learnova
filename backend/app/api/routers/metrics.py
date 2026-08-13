@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_, and_
 from app.core.database import get_db
 from typing import Optional
 from uuid import UUID
@@ -8,7 +8,8 @@ from uuid import UUID
 from app.models.generation import GenerationSession, GeneratedQuestion, ApprovalStatus
 from app.models.question import Question
 from app.models.paper import QuestionPaper, PaperStatus
-from app.models.workspace import Exam
+from app.models.workspace import Exam, Subject
+from app.models.sharing import SharePermission
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/api/v1", tags=["metrics"])
@@ -20,17 +21,14 @@ async def get_metrics(
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    """
-    Returns application-level operational metrics in a machine-readable JSON format.
-    """
     import uuid
     user_uuid = uuid.UUID(user_id)
     
     if exam_id:
         exam_result = await db.execute(select(Exam).where(Exam.id == exam_id))
         exam = exam_result.scalar_one_or_none()
-        if not exam or (exam.created_by is not None and exam.created_by != user_uuid):
-            raise HTTPException(status_code=403, detail="Not authorized to access this exam context")
+        if not exam:
+            raise HTTPException(status_code=404, detail="Exam not found")
 
     metrics = {
         "generation": {},
@@ -38,6 +36,10 @@ async def get_metrics(
         "papers": {}
     }
 
+    # Helper for base filtering to ensure we only count things the user owns (since metrics usually reflect user's own data)
+    # Actually, let's include global and shared if we want, but usually metrics = my workspace
+    # To keep it simple, we filter to Exam.created_by == user_uuid
+    
     # Generation Metrics
     gen_query = select(
         GenerationSession.status,
@@ -46,7 +48,8 @@ async def get_metrics(
         func.sum(GenerationSession.duplicate_count),
         func.sum(GenerationSession.invalid_count),
         func.sum(GenerationSession.repair_count)
-    )
+    ).join(Subject, GenerationSession.subject_id == Subject.id).where(Subject.created_by == user_uuid)
+    
     if exam_id:
         gen_query = gen_query.where(GenerationSession.exam_id == exam_id)
     if subject_id:
@@ -86,13 +89,14 @@ async def get_metrics(
     }
 
     # Question Bank Metrics
-    q_query = select(GeneratedQuestion.approval_status, func.count(GeneratedQuestion.id))
-    if exam_id or subject_id:
-        q_query = q_query.join(GenerationSession, GeneratedQuestion.session_id == GenerationSession.id)
-        if exam_id:
-            q_query = q_query.where(GenerationSession.exam_id == exam_id)
-        if subject_id:
-            q_query = q_query.where(GenerationSession.subject_id == subject_id)
+    q_query = select(GeneratedQuestion.approval_status, func.count(GeneratedQuestion.id)).join(
+        GenerationSession, GeneratedQuestion.session_id == GenerationSession.id
+    ).join(Subject, GenerationSession.subject_id == Subject.id).where(Subject.created_by == user_uuid)
+    
+    if exam_id:
+        q_query = q_query.where(GenerationSession.exam_id == exam_id)
+    if subject_id:
+        q_query = q_query.where(GenerationSession.subject_id == subject_id)
 
     q_stats = await db.execute(q_query.group_by(GeneratedQuestion.approval_status))
     
@@ -116,7 +120,21 @@ async def get_metrics(
     }
 
     # Papers Metrics
-    p_query = select(QuestionPaper.status, func.count(QuestionPaper.id))
+    p_query = select(QuestionPaper.status, func.count(QuestionPaper.id)).join(
+        Subject, QuestionPaper.subject_id == Subject.id
+    ).outerjoin(
+        SharePermission, and_(
+            SharePermission.entity_id == QuestionPaper.id,
+            SharePermission.entity_type == "paper",
+            SharePermission.shared_with_id == user_uuid
+        )
+    ).where(
+        or_(
+            Subject.created_by == user_uuid,
+            SharePermission.id != None
+        )
+    )
+    
     if exam_id:
         p_query = p_query.where(QuestionPaper.exam_id == exam_id)
     if subject_id:
@@ -158,13 +176,16 @@ async def get_activity(
     if exam_id:
         exam_result = await db.execute(select(Exam).where(Exam.id == exam_id))
         exam = exam_result.scalar_one_or_none()
-        if not exam or (exam.created_by is not None and exam.created_by != user_uuid):
-            raise HTTPException(status_code=403, detail="Not authorized to access this exam context")
+        if not exam:
+            raise HTTPException(status_code=404, detail="Exam not found")
             
     activities = []
     
     # 1. Fetch recent generation sessions
-    gen_q = select(GenerationSession).order_by(GenerationSession.created_at.desc()).limit(limit)
+    gen_q = select(GenerationSession).join(
+        Subject, GenerationSession.subject_id == Subject.id
+    ).where(Subject.created_by == user_uuid).order_by(GenerationSession.created_at.desc()).limit(limit)
+    
     if exam_id:
         gen_q = gen_q.where(GenerationSession.exam_id == exam_id)
     if subject_id:
@@ -183,7 +204,21 @@ async def get_activity(
         })
         
     # 2. Fetch recent papers
-    pap_q = select(QuestionPaper).order_by(QuestionPaper.created_at.desc()).limit(limit)
+    pap_q = select(QuestionPaper).join(
+        Subject, QuestionPaper.subject_id == Subject.id
+    ).outerjoin(
+        SharePermission, and_(
+            SharePermission.entity_id == QuestionPaper.id,
+            SharePermission.entity_type == "paper",
+            SharePermission.shared_with_id == user_uuid
+        )
+    ).where(
+        or_(
+            Subject.created_by == user_uuid,
+            SharePermission.id != None
+        )
+    ).order_by(QuestionPaper.created_at.desc()).limit(limit)
+    
     if exam_id:
         pap_q = pap_q.where(QuestionPaper.exam_id == exam_id)
     if subject_id:
@@ -201,6 +236,5 @@ async def get_activity(
             "created_at": p.created_at.isoformat(),
         })
         
-    # Sort descending
     activities.sort(key=lambda x: x["created_at"], reverse=True)
     return activities[:limit]

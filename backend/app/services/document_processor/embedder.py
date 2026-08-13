@@ -30,5 +30,17 @@ class Embedder:
         embeddings = self._model.encode(texts, batch_size=batch_size, show_progress_bar=False)
         return embeddings.tolist()
 
+    def get_device_status(self) -> str:
+        """Safely returns the device type without raising exceptions."""
+        try:
+            if self._model and hasattr(self._model, "device"):
+                return "GPU" if "cuda" in str(self._model.device).lower() else "CPU"
+            
+            # If model isn't loaded yet, try to safely check torch
+            import torch
+            return "GPU" if torch.cuda.is_available() else "CPU"
+        except Exception:
+            return "CPU"
+
 # Singleton instance
 embedder = Embedder()

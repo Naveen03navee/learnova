@@ -14,7 +14,10 @@ class NonFallbackError(AIProviderError):
 
 class RateLimitError(FallbackEligibleError):
     """Raised when the provider enforces a rate limit or quota restriction."""
-    pass
+    def __init__(self, message: str, retry_after_seconds: int = None, quota_exhausted: bool = False):
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+        self.quota_exhausted = quota_exhausted
 
 class TimeoutError(FallbackEligibleError):
     """Raised when the provider request times out."""

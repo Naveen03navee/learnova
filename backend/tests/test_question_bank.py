@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.models.question import Question
 
 app = FastAPI()
-app.include_router(questions.router, prefix="/api/v1")
+app.include_router(questions.router)
 
 class TestQuestionBankUpdates(unittest.TestCase):
     def setUp(self):
@@ -27,6 +27,7 @@ class TestQuestionBankUpdates(unittest.TestCase):
         
         # Setup existing question
         mock_question = MagicMock()
+        mock_question.access = None
         mock_question.id = uuid4()
         mock_question.generated_question_id = uuid4()
         mock_question.exam_id = uuid4()
@@ -40,9 +41,31 @@ class TestQuestionBankUpdates(unittest.TestCase):
         mock_question.source_citation = "Book"
         mock_question.embedding = [0.1] * 384
         
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_question
-        mock_db.execute.return_value = mock_result
+        user_id = str(uuid4())
+        class MockExamObj:
+            id = mock_question.exam_id
+            created_by = None
+        async def mock_get(model, id):
+            if model.__name__ == 'Exam': return MockExamObj()
+            return None
+        mock_db.get = AsyncMock(side_effect=mock_get)
+        
+        async def mock_execute(stmt, *args, **kwargs):
+            stmt_str = str(stmt).lower()
+            mock_res = MagicMock()
+            if "subjects.created_by" in stmt_str:
+                import uuid
+                mock_res.scalar_one_or_none.return_value = uuid.UUID(user_id)
+            elif "questions.subject_id" in stmt_str and "questions.id" not in stmt_str:
+                mock_res.scalar_one_or_none.return_value = mock_question.subject_id
+            elif "questions.exam_id" in stmt_str and "questions.id" not in stmt_str:
+                mock_res.scalar_one_or_none.return_value = mock_question.exam_id
+            elif "sharepermission" in stmt_str:
+                mock_res.scalar_one_or_none.return_value = None
+            else:
+                mock_res.scalar_one_or_none.return_value = mock_question
+            return mock_res
+        mock_db.execute = AsyncMock(side_effect=mock_execute)
         
         # Mock new embedding
         new_embedding = [0.9] * 384
@@ -51,7 +74,12 @@ class TestQuestionBankUpdates(unittest.TestCase):
         async def override_get_db():
             yield mock_db
             
+        async def override_get_current_user():
+            return user_id
+            
         app.dependency_overrides[get_db] = override_get_db
+        from app.api.deps import get_current_user
+        app.dependency_overrides[get_current_user] = override_get_current_user
         
         # Update text
         payload = {
@@ -73,6 +101,7 @@ class TestQuestionBankUpdates(unittest.TestCase):
         mock_db.commit.assert_called_once()
         
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
         
     @patch('app.services.generation.deduplicator.generate_question_embedding', new_callable=AsyncMock)
     @patch('app.api.routers.questions.AsyncSession')
@@ -81,6 +110,7 @@ class TestQuestionBankUpdates(unittest.TestCase):
         
         # Setup existing question
         mock_question = MagicMock()
+        mock_question.access = None
         mock_question.id = uuid4()
         mock_question.generated_question_id = uuid4()
         mock_question.exam_id = uuid4()
@@ -94,14 +124,41 @@ class TestQuestionBankUpdates(unittest.TestCase):
         mock_question.source_citation = "Book"
         mock_question.embedding = [0.1] * 384
         
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_question
-        mock_db.execute.return_value = mock_result
+        user_id = str(uuid4())
+        class MockExamObj:
+            id = mock_question.exam_id
+            created_by = None
+        async def mock_get(model, id):
+            if model.__name__ == 'Exam': return MockExamObj()
+            return None
+        mock_db.get = AsyncMock(side_effect=mock_get)
+        
+        async def mock_execute(stmt, *args, **kwargs):
+            stmt_str = str(stmt).lower()
+            mock_res = MagicMock()
+            if "subjects.created_by" in stmt_str:
+                import uuid
+                mock_res.scalar_one_or_none.return_value = uuid.UUID(user_id)
+            elif "questions.subject_id" in stmt_str and "questions.id" not in stmt_str:
+                mock_res.scalar_one_or_none.return_value = mock_question.subject_id
+            elif "questions.exam_id" in stmt_str and "questions.id" not in stmt_str:
+                mock_res.scalar_one_or_none.return_value = mock_question.exam_id
+            elif "sharepermission" in stmt_str:
+                mock_res.scalar_one_or_none.return_value = None
+            else:
+                mock_res.scalar_one_or_none.return_value = mock_question
+            return mock_res
+        mock_db.execute = AsyncMock(side_effect=mock_execute)
         
         async def override_get_db():
             yield mock_db
             
+        async def override_get_current_user():
+            return user_id
+            
         app.dependency_overrides[get_db] = override_get_db
+        from app.api.deps import get_current_user
+        app.dependency_overrides[get_current_user] = override_get_current_user
         
         # Update just difficulty
         payload = {
@@ -119,6 +176,11 @@ class TestQuestionBankUpdates(unittest.TestCase):
         mock_db.commit.assert_called_once()
         
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
 if __name__ == '__main__':
     unittest.main()
+
+
+
+

@@ -41,16 +41,20 @@ class TestGenerationOrchestrator(unittest.IsolatedAsyncioTestCase):
             repair_count=0,
             duplicate_count=0
         )
+        from app.models.workspace import Exam, Subject
+        exam = Exam(id=uuid4(), name="Test Exam")
+        subject = Subject(id=uuid4(), name="Test Subject")
+        
         mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = db_session_obj
+        mock_result.first.return_value = (db_session_obj, exam, subject)
         mock_db_instance.execute.return_value = mock_result
         
         mock_retrieve.return_value = MagicMock(results=["chunk1"])
         mock_context.return_value = ("context", {"source1": {"resource_id": uuid4(), "chunk_id": uuid4()}})
         
-        # AI returns 1 question per attempt
+        # AI returns 5 questions per attempt to pass batch constraint
         mock_ai_response = MagicMock()
-        mock_ai_response.parsed_output.questions = [MagicMock(question_text="Q1", source_citations=["source1"], model_dump=lambda: {})]
+        mock_ai_response.parsed_output.questions = [MagicMock(question_text=f"Q{i}", source_citations=["source1"], model_dump=lambda: {}) for i in range(5)]
         mock_ai_response.provider_name = "test"
         mock_ai.generate = AsyncMock(return_value=mock_ai_response)
         
@@ -71,7 +75,7 @@ class TestGenerationOrchestrator(unittest.IsolatedAsyncioTestCase):
             # It will fail 4 times in batch 1, 4 times in supp batch 2, 2 times in supp batch 3
             # before hitting the global limit of 10.
             self.assertEqual(mock_ai.generate.call_count, 10)
-            self.assertEqual(db_session_obj.invalid_count, 10)
+            self.assertEqual(db_session_obj.invalid_count, 50)
             self.assertEqual(db_session_obj.valid_count, 0)
         finally:
             settings.GENERATION_MAX_REPAIR_ATTEMPTS = original_max
@@ -79,3 +83,7 @@ class TestGenerationOrchestrator(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+
+

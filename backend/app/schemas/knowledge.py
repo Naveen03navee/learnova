@@ -40,6 +40,7 @@ class ResourceResponse(BaseModel):
     status: ResourceStatus
     created_at: datetime
     updated_at: datetime
+    access: Optional[dict] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routers import exams, subjects, folders, resources, rag, generation, questions, papers, health, metrics, patterns
+from app.api.routers import exams, subjects, folders, resources, rag, generation, questions, papers, health, metrics, patterns, shares
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
 from app.core.request_context import set_request_id
@@ -60,7 +60,13 @@ async def lifespan(app: FastAPI):
     
     yield
     # Shutdown actions
-    logger.info("Application shutting down, disposing database connections...")
+    logger.info("Application shutting down, closing AI provider clients...")
+    try:
+        from app.services.ai.manager import ai_manager
+        await ai_manager.aclose_clients()
+    except Exception as e:
+        logger.error(f"Failed to close AI provider clients on shutdown: {e}")
+    logger.info("Disposing database connections...")
     await engine.dispose()
     logger.info("Database connections disposed.")
 
@@ -74,7 +80,17 @@ app = FastAPI(
 async def add_request_id_middleware(request: Request, call_next):
     req_id = str(uuid.uuid4())
     set_request_id(req_id)
+    
+    # Let FastAPI process the request with the real token
     response = await call_next(request)
+    
+    # Sanitize JWT tokens from query strings AFTER processing so they don't leak into Uvicorn access logs
+    qs = request.scope.get("query_string", b"").decode("utf-8")
+    if "token=" in qs:
+        import re
+        sanitized_qs = re.sub(r'token=[^&]+', 'token=***', qs)
+        request.scope["query_string"] = sanitized_qs.encode("utf-8")
+        
     return response
 
 # CORS
@@ -98,5 +114,6 @@ app.include_router(papers.router)
 app.include_router(patterns.router)
 app.include_router(health.router)
 app.include_router(metrics.router)
+app.include_router(shares.router)
 
 

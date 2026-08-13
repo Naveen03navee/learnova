@@ -38,8 +38,12 @@ class TestGenerationFailures(unittest.IsolatedAsyncioTestCase):
             repair_count=0,
             duplicate_count=0
         )
+        from app.models.workspace import Exam, Subject
+        exam = Exam(id=uuid4(), name="Test Exam")
+        subject = Subject(id=uuid4(), name="Test Subject")
+        
         mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = db_session_obj
+        mock_result.first.return_value = (db_session_obj, exam, subject)
         mock_db_instance.execute.return_value = mock_result
         
         mock_retrieve.return_value = MagicMock(results=["chunk1"])
@@ -93,7 +97,12 @@ class TestGenerationFailures(unittest.IsolatedAsyncioTestCase):
             repair_count=0,
             duplicate_count=0
         )
+        from app.models.workspace import Exam, Subject
+        exam = Exam(id=uuid4(), name="Test Exam")
+        subject = Subject(id=uuid4(), name="Test Subject")
+        
         mock_result = MagicMock()
+        mock_result.first.return_value = (db_session_obj, exam, subject)
         mock_result.scalar_one_or_none.return_value = db_session_obj
         mock_db_instance.execute.return_value = mock_result
         
@@ -127,3 +136,7 @@ class TestGenerationFailures(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+
+

@@ -16,6 +16,8 @@ class ExamResponse(BaseModel):
     exam_type: Optional[str] = None
     description: Optional[str] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    access: Optional[dict] = None
     created_by: Optional[UUID] = None
     
     model_config = ConfigDict(from_attributes=True)

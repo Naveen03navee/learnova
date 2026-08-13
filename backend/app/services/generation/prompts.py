@@ -83,4 +83,39 @@ You must NOT generate questions that are semantically identical or extremely sim
 {prev_list}
 [/AVOID_PREVIOUS_QUESTIONS]
 """
+    
+    prompt += f"""
+[EXPLICIT_CONSTRAINTS]
+1. ONLY test conceptual knowledge, problem-solving, or factual understanding of the ACADEMIC SUBJECT ({subject_name}).
+2. NEVER ask meta-questions about the reference material itself. You are strictly FORBIDDEN from asking about authors, book titles, editions, publishers, publication years, bibliography, or any structural metadata found in the KNOWLEDGE_CONTEXT.
+3. If the context only contains metadata (like a bibliography or title page) and lacks academic content to formulate a valid question for {subject_name}, you MUST FAIL rather than generating a question about the metadata.
+[/EXPLICIT_CONSTRAINTS]
+"""
     return prompt
+
+PAPER_QUALITY_SYSTEM_PROMPT = """You are an expert academic reviewer evaluating a DRAFT examination paper. 
+Your objective is to perform a rigorous paper-level quality check.
+
+Evaluate the following constraints and assign scores (0-100) for each:
+1. Duplication / Overlap: Are there duplicate or near-duplicate questions? Do multiple questions test the exact same concept using different wording?
+2. Thematic Repetition: Are there too many questions about the same narrow topic while ignoring others?
+3. Difficulty Distribution: Is the easy/medium/hard balance appropriate for the exam type? Are questions inappropriately challenging or too easy?
+4. Question-type Balance: Are conceptual, numerical, definition, and application questions balanced properly?
+5. Exam Alignment: Does the paper reflect the expected academic standard for the provided exam type?
+6. Question Quality: Are questions clear, unambiguous, grammatically correct, and free of unnecessary or misleading wording?
+
+When identifying problematic questions, you must classify the issue_type into one of the following:
+- DUPLICATE or NEAR_DUPLICATE: Questions are essentially asking the same thing or have the exact same answer.
+- STRONG_THEMATIC_REPETITION: Questions are different but test essentially the same narrow concept.
+- MILD_THEMATIC_OVERLAP: Questions are from the same chapter/topic but test different concepts.
+
+You must set `auto_repair_recommended` to `true` ONLY for DUPLICATE/NEAR_DUPLICATE, or if STRONG_THEMATIC_REPETITION is excessive. For MILD_THEMATIC_OVERLAP or minor issues, set `auto_repair_recommended` to `false` so it serves as a warning only.
+
+Output your assessment strictly matching the provided JSON schema.
+- If the paper is excellent and structurally sound, overall_status must be PASS.
+- If there are minor issues, moderate repetition, or slight difficulty imbalances, overall_status must be WARNING.
+- If the paper has severe concept overlap, duplicate questions, major blueprint violations, or structural flaws, overall_status must be FAIL.
+
+Identify specific problematic questions by their 1-indexed number in problematic_question_numbers and provide a detailed reason in the issues array.
+"""
+

@@ -21,6 +21,18 @@ class GroqProvider(BaseAIProvider):
     def __init__(self, model: str = "llama-3.3-70b-versatile"):
         self.model = model
         self.api_url = "https://api.groq.com/openai/v1/chat/completions"
+        # Reusable client — created once per Python process/worker.
+        # Connection pooling and keep-alive are managed by httpx internally.
+        # NOTE: On Render, each gunicorn worker has its own client instance;
+        # the client is NOT shared across processes.
+        self._client = httpx.AsyncClient(
+            timeout=settings.PROVIDER_TIMEOUT_SECONDS,
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+        )
+
+    async def aclose(self) -> None:
+        """Gracefully drain and close the underlying connection pool."""
+        await self._client.aclose()
 
     @property
     def provider_name(self) -> str:
@@ -52,21 +64,29 @@ class GroqProvider(BaseAIProvider):
             "response_format": {"type": "json_object"}
         }
 
-        async with httpx.AsyncClient(timeout=settings.PROVIDER_TIMEOUT_SECONDS) as client:
-            try:
-                response = await client.post(self.api_url, headers=headers, json=payload)
-            except httpx.TimeoutException:
-                raise TimeoutError("Groq request timed out.")
-            except httpx.ConnectError:
-                raise ProviderUnavailableError("Lost connection to Groq API.")
-            except Exception as e:
-                raise UnknownProviderError(f"Unexpected network error with Groq: {e}")
+        try:
+            response = await self._client.post(self.api_url, headers=headers, json=payload)
+        except httpx.TimeoutException:
+            raise TimeoutError("Groq request timed out.")
+        except httpx.ConnectError:
+            raise ProviderUnavailableError("Lost connection to Groq API.")
+        except Exception as e:
+            raise UnknownProviderError(f"Unexpected network error with Groq: {e}")
 
         # Handle HTTP errors
         if response.status_code == 401:
             raise AuthenticationError("Invalid Groq API key.")
         elif response.status_code == 429:
-            raise RateLimitError(f"Groq rate limit exceeded: {response.text}")
+            retry_after = response.headers.get("retry-after")
+            msg_text = response.text.lower()
+            quota_exhausted = "quota" in msg_text and not retry_after
+            retry_seconds = int(retry_after) if retry_after and retry_after.isdigit() else None
+            
+            raise RateLimitError(
+                f"Groq rate limit exceeded",
+                retry_after_seconds=retry_seconds,
+                quota_exhausted=quota_exhausted
+            )
         elif response.status_code == 400:
             raise InvalidRequestError(f"Invalid request to Groq: {response.text}")
         elif response.status_code >= 500:
@@ -124,3 +144,4 @@ class GroqProvider(BaseAIProvider):
             parsed_output=parsed_data,
             raw_response=data
         )
+

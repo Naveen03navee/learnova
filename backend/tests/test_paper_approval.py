@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.models.paper import QuestionPaper, QuestionPaperItem, PaperStatus
 
 app = FastAPI()
-app.include_router(papers.router, prefix="/api/v1")
+app.include_router(papers.router)
 
 class TestPaperApproval(unittest.TestCase):
     def setUp(self):
@@ -25,6 +25,7 @@ class TestPaperApproval(unittest.TestCase):
         
         # Setup Paper that violates structural validation (e.g., missing correct answer in MCQ)
         mock_paper = MagicMock(spec=QuestionPaper)
+        mock_paper.access = None
         mock_paper.id = uuid4()
         mock_paper.status = PaperStatus.DRAFT
         mock_paper.config = {
@@ -51,12 +52,43 @@ class TestPaperApproval(unittest.TestCase):
         
         mock_paper.items = [mock_item]
         
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_paper
-        mock_db.execute.return_value = mock_result
+        user_id = str(uuid4())
+        mock_paper.subject_id = uuid4()
+        mock_paper.exam_id = uuid4()
+        
+        class MockExam:
+            id = mock_paper.exam_id
+            created_by = None
+            
+        async def mock_get(model, id):
+            if model.__name__ == 'Exam': return MockExam()
+            return None
+        mock_db.get = AsyncMock(side_effect=mock_get)
+        
+        async def mock_execute(stmt):
+            stmt_str = str(stmt).lower()
+            mock_res = MagicMock()
+            if "subjects.created_by" in stmt_str:
+                import uuid
+                mock_res.scalar_one_or_none.return_value = uuid.UUID(user_id)
+            elif "question_papers.exam_id" in stmt_str and "question_papers.id" not in stmt_str:
+                mock_res.scalar_one_or_none.return_value = mock_paper.exam_id
+            elif "sharepermission" in stmt_str:
+                mock_res.scalar_one_or_none.return_value = None
+            else:
+                mock_res.scalar_one_or_none.return_value = mock_paper
+            return mock_res
+        mock_db.execute = AsyncMock(side_effect=mock_execute)
         
         async def override_get_db():
             yield mock_db
+            
+        async def override_get_current_user():
+            return user_id
+            
+        app.dependency_overrides[get_db] = override_get_db
+        from app.api.deps import get_current_user
+        app.dependency_overrides[get_current_user] = override_get_current_user
             
         app.dependency_overrides[get_db] = override_get_db
         
@@ -67,24 +99,57 @@ class TestPaperApproval(unittest.TestCase):
         self.assertIn("does not match any option", response.json()["detail"]["errors"][0])
         
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
     @patch('app.api.routers.papers.AsyncSession')
     def test_approve_paper_quality_report_stale(self, mock_session_cls):
         mock_db = AsyncMock()
         
         mock_paper = MagicMock(spec=QuestionPaper)
+        mock_paper.access = None
         mock_paper.id = uuid4()
         mock_paper.status = PaperStatus.DRAFT
         mock_paper.config = {"sections": []}
         mock_paper.items = []
         mock_paper.quality_report_stale = True # Stale
         
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_paper
-        mock_db.execute.return_value = mock_result
+        user_id = str(uuid4())
+        mock_paper.subject_id = uuid4()
+        mock_paper.exam_id = uuid4()
+        
+        class MockExam:
+            id = mock_paper.exam_id
+            created_by = None
+            
+        async def mock_get(model, id):
+            if model.__name__ == 'Exam': return MockExam()
+            return None
+        mock_db.get = AsyncMock(side_effect=mock_get)
+        
+        async def mock_execute(stmt):
+            stmt_str = str(stmt).lower()
+            mock_res = MagicMock()
+            if "subjects.created_by" in stmt_str:
+                import uuid
+                mock_res.scalar_one_or_none.return_value = uuid.UUID(user_id)
+            elif "question_papers.exam_id" in stmt_str and "question_papers.id" not in stmt_str:
+                mock_res.scalar_one_or_none.return_value = mock_paper.exam_id
+            elif "sharepermission" in stmt_str:
+                mock_res.scalar_one_or_none.return_value = None
+            else:
+                mock_res.scalar_one_or_none.return_value = mock_paper
+            return mock_res
+        mock_db.execute = AsyncMock(side_effect=mock_execute)
         
         async def override_get_db():
             yield mock_db
+            
+        async def override_get_current_user():
+            return user_id
+            
+        app.dependency_overrides[get_db] = override_get_db
+        from app.api.deps import get_current_user
+        app.dependency_overrides[get_current_user] = override_get_current_user
             
         app.dependency_overrides[get_db] = override_get_db
         
@@ -94,12 +159,14 @@ class TestPaperApproval(unittest.TestCase):
         self.assertEqual(response.json()["detail"], "AI Quality Check is stale. Please re-run the check before approving.")
         
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
     @patch('app.api.routers.papers.AsyncSession')
     def test_approve_paper_quality_status_fail_without_override(self, mock_session_cls):
         mock_db = AsyncMock()
         
         mock_paper = MagicMock(spec=QuestionPaper)
+        mock_paper.access = None
         mock_paper.id = uuid4()
         mock_paper.status = PaperStatus.DRAFT
         mock_paper.config = {"sections": []}
@@ -107,12 +174,43 @@ class TestPaperApproval(unittest.TestCase):
         mock_paper.quality_report_stale = False
         mock_paper.quality_status = "FAIL"
         
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_paper
-        mock_db.execute.return_value = mock_result
+        user_id = str(uuid4())
+        mock_paper.subject_id = uuid4()
+        mock_paper.exam_id = uuid4()
+        
+        class MockExam:
+            id = mock_paper.exam_id
+            created_by = None
+            
+        async def mock_get(model, id):
+            if model.__name__ == 'Exam': return MockExam()
+            return None
+        mock_db.get = AsyncMock(side_effect=mock_get)
+        
+        async def mock_execute(stmt):
+            stmt_str = str(stmt).lower()
+            mock_res = MagicMock()
+            if "subjects.created_by" in stmt_str:
+                import uuid
+                mock_res.scalar_one_or_none.return_value = uuid.UUID(user_id)
+            elif "question_papers.exam_id" in stmt_str and "question_papers.id" not in stmt_str:
+                mock_res.scalar_one_or_none.return_value = mock_paper.exam_id
+            elif "sharepermission" in stmt_str:
+                mock_res.scalar_one_or_none.return_value = None
+            else:
+                mock_res.scalar_one_or_none.return_value = mock_paper
+            return mock_res
+        mock_db.execute = AsyncMock(side_effect=mock_execute)
         
         async def override_get_db():
             yield mock_db
+            
+        async def override_get_current_user():
+            return user_id
+            
+        app.dependency_overrides[get_db] = override_get_db
+        from app.api.deps import get_current_user
+        app.dependency_overrides[get_current_user] = override_get_current_user
             
         app.dependency_overrides[get_db] = override_get_db
         
@@ -122,12 +220,14 @@ class TestPaperApproval(unittest.TestCase):
         self.assertIn("Explicit override required", response.json()["detail"])
         
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
     @patch('app.api.routers.papers.AsyncSession')
     def test_approve_paper_quality_status_fail_with_override(self, mock_session_cls):
         mock_db = AsyncMock()
         
         mock_paper = MagicMock(spec=QuestionPaper)
+        mock_paper.access = None
         mock_paper.id = uuid4()
         mock_paper.exam_id = uuid4()
         mock_paper.subject_id = uuid4()
@@ -139,16 +239,43 @@ class TestPaperApproval(unittest.TestCase):
         mock_paper.quality_status = "FAIL"
         mock_paper.quality_report = {}
         
-        def mock_execute(*args, **kwargs):
+        user_id = str(uuid4())
+        
+        class MockExam:
+            id = mock_paper.exam_id
+            created_by = None
+            
+        async def mock_get(model, id):
+            if model.__name__ == 'Exam': return MockExam()
+            return None
+        mock_db.get = AsyncMock(side_effect=mock_get)
+        
+        def mock_execute(stmt, *args, **kwargs):
+            stmt_str = str(stmt).lower()
             mock_res = MagicMock()
-            mock_res.scalar_one_or_none.return_value = mock_paper
-            mock_res.scalar_one.return_value = mock_paper
+            if "subjects.created_by" in stmt_str:
+                import uuid
+                mock_res.scalar_one_or_none.return_value = uuid.UUID(user_id)
+            elif "question_papers.exam_id" in stmt_str and "question_papers.id" not in stmt_str:
+                mock_res.scalar_one_or_none.return_value = mock_paper.exam_id
+            elif "sharepermission" in stmt_str:
+                mock_res.scalar_one_or_none.return_value = None
+            else:
+                mock_res.scalar_one_or_none.return_value = mock_paper
+                mock_res.scalar_one.return_value = mock_paper
             return mock_res
             
         mock_db.execute = AsyncMock(side_effect=mock_execute)
         
         async def override_get_db():
             yield mock_db
+            
+        async def override_get_current_user():
+            return user_id
+            
+        app.dependency_overrides[get_db] = override_get_db
+        from app.api.deps import get_current_user
+        app.dependency_overrides[get_current_user] = override_get_current_user
             
         app.dependency_overrides[get_db] = override_get_db
         
@@ -159,6 +286,11 @@ class TestPaperApproval(unittest.TestCase):
         mock_db.commit.assert_called_once()
         
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
 if __name__ == '__main__':
     unittest.main()
+
+
+
+

@@ -1,26 +1,35 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.supabase import get_supabase_client
 from app.core.database import get_db
 from app.models.workspace import Profile
 import uuid
+from typing import Optional
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    token: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ) -> str:
     """
     Validates the Supabase JWT, ensures the user exists in the profiles table, 
     and returns the authenticated user ID.
     """
-    token = credentials.credentials
+    auth_token = credentials.credentials if credentials else token
+    if not auth_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     supabase = get_supabase_client()
     try:
         # Validate token against Supabase Auth
-        response = supabase.auth.get_user(token)
+        response = supabase.auth.get_user(auth_token)
         user = response.user
         if not user:
             raise ValueError("Invalid user")

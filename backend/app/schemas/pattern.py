@@ -53,6 +53,7 @@ class ExamPatternResponse(BaseModel):
     extracted_example_count: Optional[int] = None
     created_at: datetime
     updated_at: datetime
+    access: Optional[dict] = None
 
     class Config:
         from_attributes = True
