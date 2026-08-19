@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Learnova API"
     API_V1_STR: str = "/api/v1"
     
-    CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "https://*.vercel.app"]
+    CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -50,20 +50,19 @@ class Settings(BaseSettings):
     AI_PROVIDER_EASY: str = "gemini"
     AI_PROVIDER_MEDIUM: str = "gemini"
     AI_PROVIDER_HARD: str = "gemini"
-    AI_FALLBACK_CHAIN: str = "groq,ollama"
+    AI_FALLBACK_CHAIN: str = "groq,ollama-nemotron,ollama-qwen3"
 
     GENERATION_MAX_CONTEXT_TOKENS: int = 4000
     GENERATION_MAX_RETRIEVAL_CHUNKS: int = 8
     GENERATION_MAX_CHUNKS_PER_RESOURCE: int = 4
     
-    # Phase 7 Batching Config
     GENERATION_BATCH_SIZE: int = 5
-    GENERATION_MAX_BATCHES: int = 10
-    GENERATION_MAX_SUPPLEMENTARY_BATCHES: int = 3
+    GENERATION_MAX_BATCHES: int = 20
+    GENERATION_MAX_SUPPLEMENTARY_BATCHES: int = 10
     GENERATION_MAX_REPAIR_ATTEMPTS: int = 2
-    GENERATION_MAX_TOTAL_LLM_CALLS: int = 20 # Supports initial + supplementary + repairs
+    GENERATION_MAX_TOTAL_LLM_CALLS: int = 50 # Increased to allow larger generations
     
-    GENERATION_DUPLICATE_THRESHOLD: float = 0.85 # Cosine similarity threshold for deduplication
+    GENERATION_DUPLICATE_THRESHOLD: float = 0.90 # Less strict deduplication
 
     PROVIDER_TIMEOUT_SECONDS: int = 60
     GENERATION_TIMEOUT_SECONDS: int = 120

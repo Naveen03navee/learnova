@@ -21,7 +21,8 @@ class AIManager:
             "gemini": GeminiProvider(),
             "openai": OpenAIProvider(),
             "anthropic": AnthropicProvider(),
-            "ollama": OllamaProvider(),
+            "ollama-nemotron": OllamaProvider(model="nemotron-3-nano:4b", provider_name="ollama-nemotron"),
+            "ollama-qwen3": OllamaProvider(model="qwen3:8b", provider_name="ollama-qwen3"),
             "groq": GroqProvider()
         }
         

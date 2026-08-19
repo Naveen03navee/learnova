@@ -18,8 +18,9 @@ from app.services.ai.errors import (
 )
 
 class OllamaProvider(BaseAIProvider):
-    def __init__(self, model: str = "qwen2.5:7b"):
+    def __init__(self, model: str = "nemotron-3-nano:4b", provider_name: str = "ollama"):
         self.model = model
+        self._provider_name = provider_name
         self.base_url = settings.OLLAMA_BASE_URL.rstrip('/') if settings.OLLAMA_BASE_URL else None
         # Reusable client — created once per Python process/worker.
         # Connection pooling and keep-alive are managed by httpx internally.
@@ -36,7 +37,7 @@ class OllamaProvider(BaseAIProvider):
 
     @property
     def provider_name(self) -> str:
-        return "ollama"
+        return self._provider_name
 
     async def _check_availability(self):
         """Pings the Ollama server to ensure it is running."""

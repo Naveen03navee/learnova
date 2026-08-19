@@ -100,9 +100,8 @@ export function GenerationForm() {
            <div className="flex flex-col gap-4">
               <Button 
                 onClick={() => {
-                  const sessionId = activeSessionId;
                   setActiveSessionId(null);
-                  router.push(`/workspace/review?session_id=${sessionId}`);
+                  router.push(`/workspace/review`);
                 }}
               >
                 Review Generated Questions

@@ -115,7 +115,11 @@ export function PaperBuilder() {
               <div className="flex-1 space-y-1">
                 <Label>Exam</Label>
                 <Select value={examId} onValueChange={(val) => { if(val) { setExamId(val); setSubjectId(""); } }}>
-                  <SelectTrigger><SelectValue placeholder="Select Exam" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Exam">
+                      {examId ? (exams.find((e: any) => e.id === examId)?.name ?? "Select Exam") : "Select Exam"}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     {exams.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
                   </SelectContent>
@@ -124,7 +128,11 @@ export function PaperBuilder() {
               <div className="flex-1 space-y-1">
                 <Label>Subject</Label>
                 <Select value={subjectId} onValueChange={(val) => val && setSubjectId(val)} disabled={!examId}>
-                  <SelectTrigger><SelectValue placeholder="Select Subject" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Subject">
+                      {subjectId ? (subjects.find((s: any) => s.id === subjectId)?.name ?? "Select Subject") : "Select Subject"}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     {subjects.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                   </SelectContent>

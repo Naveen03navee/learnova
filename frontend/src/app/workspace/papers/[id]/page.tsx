@@ -64,7 +64,7 @@ export default function PaperReviewPage() {
     
     // Connect to SSE stream
     const token = localStorage.getItem("auth_token") || "";
-    const eventSource = new EventSource(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/papers/${id}/quality-check/stream?token=${token}`);
+    const eventSource = new EventSource(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/v1/papers/${id}/quality-check/stream?token=${token}`);
     
     eventSource.onmessage = (event) => {
       try {
