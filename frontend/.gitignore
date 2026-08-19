@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# cloudflare - lockfile generated on Windows causes cross-platform issues
+package-lock.json
