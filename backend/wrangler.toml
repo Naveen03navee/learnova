@@ -1,0 +1,13 @@
+name = "learnova-backend"
+main = "app/main.py"
+compatibility_date = "2024-03-20"
+compatibility_flags = ["python_workers"]
+
+# Cloudflare Workers Python support requires the main file to expose an ASGI/Fetch handler.
+# Since we cannot refactor the code (per constraints), we attempt to map the FastAPI app directly.
+
+[build]
+command = ""
+
+# [vars]
+# ENVIRONMENT = "production"

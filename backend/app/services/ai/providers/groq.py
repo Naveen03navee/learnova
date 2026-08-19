@@ -18,7 +18,7 @@ from app.services.ai.errors import (
 )
 
 class GroqProvider(BaseAIProvider):
-    def __init__(self, model: str = "llama-3.3-70b-versatile"):
+    def __init__(self, model: str = "openai/gpt-oss-120b"):
         self.model = model
         self.api_url = "https://api.groq.com/openai/v1/chat/completions"
         # Reusable client — created once per Python process/worker.
