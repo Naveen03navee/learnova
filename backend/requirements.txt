@@ -16,6 +16,7 @@ httpx
 python-docx
 Pillow
 fpdf2
+numpy
 
 google-genai
 openai
