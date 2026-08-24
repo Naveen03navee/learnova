@@ -1,7 +1,5 @@
 FROM python:3.11-slim
 
-WORKDIR /app
-
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -11,13 +9,22 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
+# Set up user 1000 required by Hugging Face Spaces
+RUN useradd -m -u 1000 user
+USER user
+ENV HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1
+
+WORKDIR $HOME/app
+
 # Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY --chown=user:user requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Copy source code
-COPY . .
+COPY --chown=user:user . .
 
-# Run entrypoint
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Hugging Face Spaces uses port 7860
+EXPOSE 7860
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
