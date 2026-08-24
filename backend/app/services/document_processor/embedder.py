@@ -19,6 +19,10 @@ class Embedder:
             self._client = genai.Client(api_key=api_key)
         return self._client
 
+    def _load_model(self):
+        """Warm up Gemini client for backwards compatibility."""
+        self._get_client()
+
     def encode(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
         """
         Encodes a list of texts into 384-dimension embeddings via Gemini API.

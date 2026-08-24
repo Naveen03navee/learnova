@@ -14,26 +14,33 @@ elif os.path.exists(r"C:\Users\navee\scoop\apps\tesseract\current\tesseract.exe"
 def extract_pdf_ocr(file_bytes: bytes) -> str:
     """
     Renders PDF pages as images and extracts text using Tesseract OCR.
+    Safely falls back to empty string if Tesseract is not installed on the system.
     """
-    doc = fitz.open(stream=file_bytes, filetype="pdf")
-    full_text = []
-    
-    # Increase zoom for better OCR quality (roughly 300 DPI)
-    zoom = 2.0
-    mat = fitz.Matrix(zoom, zoom)
-    
-    for page_num in range(len(doc)):
-        page = doc[page_num]
-        pix = page.get_pixmap(matrix=mat, alpha=False)
+    try:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        full_text = []
         
-        # Convert PyMuPDF pixmap to PIL Image
-        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        # Increase zoom for better OCR quality (roughly 300 DPI)
+        zoom = 2.0
+        mat = fitz.Matrix(zoom, zoom)
         
-        # Run OCR
-        text = pytesseract.image_to_string(img)
-        
-        if text.strip():
-            full_text.append(text)
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            pix = page.get_pixmap(matrix=mat, alpha=False)
             
-    doc.close()
-    return "\n\n".join(full_text)
+            # Convert PyMuPDF pixmap to PIL Image
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            
+            # Run OCR
+            try:
+                text = pytesseract.image_to_string(img)
+                if text.strip():
+                    full_text.append(text)
+            except Exception:
+                continue
+                
+        doc.close()
+        return "\n\n".join(full_text)
+    except Exception:
+        return ""
+
