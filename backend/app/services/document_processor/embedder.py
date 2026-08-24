@@ -1,46 +1,58 @@
 from typing import List
 import os
+from google import genai
+from google.genai import types
+from app.core.config import settings
 
 class Embedder:
     _instance = None
-    _model = None
+    _client = None
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(Embedder, cls).__new__(cls)
         return cls._instance
 
-    def _load_model(self):
-        if self._model is None:
-            from sentence_transformers import SentenceTransformer
-            # HF caching works automatically in the background (default ~/.cache/huggingface)
-            self._model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-            
+    def _get_client(self):
+        if self._client is None:
+            api_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "")
+            self._client = genai.Client(api_key=api_key)
+        return self._client
+
     def encode(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
         """
-        Encodes a list of texts into embeddings.
-        Loads the model lazily if not already loaded.
+        Encodes a list of texts into 384-dimension embeddings via Gemini API.
+        Does not consume server RAM.
         """
         if not texts:
             return []
-            
-        self._load_model()
-        
-        # encode() returns a numpy array, we convert to list of floats for pgvector
-        embeddings = self._model.encode(texts, batch_size=batch_size, show_progress_bar=False)
-        return embeddings.tolist()
+
+        client = self._get_client()
+        embeddings: List[List[float]] = []
+
+        # Process in batches to avoid API payload limits
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            try:
+                response = client.models.embed_content(
+                    model="text-embedding-004",
+                    contents=batch,
+                    config=types.EmbedContentConfig(output_dimensionality=384),
+                )
+                if response.embeddings:
+                    embeddings.extend([e.values for e in response.embeddings])
+                else:
+                    embeddings.extend([[0.0] * 384 for _ in batch])
+            except Exception as e:
+                # Fallback to zero vectors if API is unreachable
+                embeddings.extend([[0.0] * 384 for _ in batch])
+
+        return embeddings
 
     def get_device_status(self) -> str:
-        """Safely returns the device type without raising exceptions."""
-        try:
-            if self._model and hasattr(self._model, "device"):
-                return "GPU" if "cuda" in str(self._model.device).lower() else "CPU"
-            
-            # If model isn't loaded yet, try to safely check torch
-            import torch
-            return "GPU" if torch.cuda.is_available() else "CPU"
-        except Exception:
-            return "CPU"
+        """Returns API status."""
+        return "Gemini API (Cloud)"
 
 # Singleton instance
 embedder = Embedder()
+

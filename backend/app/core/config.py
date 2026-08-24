@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     AI_PROVIDER_EASY: str = "gemini"
     AI_PROVIDER_MEDIUM: str = "gemini"
     AI_PROVIDER_HARD: str = "gemini"
-    AI_FALLBACK_CHAIN: str = "groq,ollama-nemotron,ollama-qwen3"
+    AI_FALLBACK_CHAIN: str = "groq,ollama-qwen2,ollama-qwen3"
 
     GENERATION_MAX_CONTEXT_TOKENS: int = 4000
     GENERATION_MAX_RETRIEVAL_CHUNKS: int = 8

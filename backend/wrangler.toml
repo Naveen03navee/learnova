@@ -1,13 +1,16 @@
 name = "learnova-backend"
-main = "app/main.py"
-compatibility_date = "2024-03-20"
-compatibility_flags = ["python_workers"]
+main = "src/index.js"
+compatibility_date = "2026-08-19"
 
-# Cloudflare Workers Python support requires the main file to expose an ASGI/Fetch handler.
-# Since we cannot refactor the code (per constraints), we attempt to map the FastAPI app directly.
+[[containers]]
+class_name = "LearnovaBackend"
+image = "./Dockerfile"
+max_instances = 5
 
-[build]
-command = ""
+[[durable_objects.bindings]]
+name = "LEARNOVA_BACKEND"
+class_name = "LearnovaBackend"
 
-# [vars]
-# ENVIRONMENT = "production"
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LearnovaBackend"]
