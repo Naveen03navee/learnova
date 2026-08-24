@@ -39,7 +39,7 @@ class Embedder:
             batch = texts[i : i + batch_size]
             try:
                 response = client.models.embed_content(
-                    model="text-embedding-004",
+                    model="models/gemini-embedding-001",
                     contents=batch,
                     config=types.EmbedContentConfig(output_dimensionality=384),
                 )
@@ -48,6 +48,8 @@ class Embedder:
                 else:
                     embeddings.extend([[0.0] * 384 for _ in batch])
             except Exception as e:
+                import logging
+                logging.getLogger("app.services.document_processor.embedder").error(f"Gemini embedding error: {e}")
                 # Fallback to zero vectors if API is unreachable
                 embeddings.extend([[0.0] * 384 for _ in batch])
 
