@@ -55,6 +55,26 @@ def export_answer_key_docx(paper: QuestionPaper) -> io.BytesIO:
     buffer.seek(0)
     return buffer
 
+def _clean_text(text: str) -> str:
+    if not text:
+        return ""
+    replacements = {
+        "\u2018": "'", "\u2019": "'",
+        "\u201c": '"', "\u201d": '"',
+        "\u2013": "-", "\u2014": "--",
+        "\u2026": "...",
+        "\u00a0": " ",
+        "\u2264": "<=", "\u2265": ">=",
+        "\u2260": "!=", "\u00b1": "+/-",
+        "\u00d7": "*", "\u00f7": "/",
+        "\u03bc": "u", "\u03a9": "Ohm",
+        "\u03c0": "pi", "\u03b8": "theta",
+        "\u03bb": "lambda", "\u03b1": "alpha", "\u03b2": "beta", "\u03b3": "gamma"
+    }
+    for k, v in replacements.items():
+        text = text.replace(k, v)
+    return text.encode("latin-1", "replace").decode("latin-1")
+
 def export_answer_key_pdf(paper: QuestionPaper) -> io.BytesIO:
     if paper.status != PaperStatus.APPROVED:
         raise ValueError("Only APPROVED papers can be exported.")
@@ -68,10 +88,11 @@ def export_answer_key_pdf(paper: QuestionPaper) -> io.BytesIO:
     pdf.set_font("Helvetica", "B", 16)
     
     # Title
+    title = _clean_text(f"{paper.title} - Answer Key")
     try:
-        pdf.cell(0, 10, f"{paper.title} - Answer Key", new_x="LMARGIN", new_y="NEXT", align='C')
+        pdf.cell(0, 10, title, new_x="LMARGIN", new_y="NEXT", align='C')
     except:
-        pdf.cell(0, 10, f"{paper.title} - Answer Key", ln=True, align='C')
+        pdf.cell(0, 10, title, ln=True, align='C')
     pdf.ln(5)
     
     # Sort items by order_index
@@ -88,17 +109,18 @@ def export_answer_key_pdf(paper: QuestionPaper) -> io.BytesIO:
     
     for section_name, section_items in sections.items():
         pdf.set_font("Helvetica", "B", 14)
+        s_name = _clean_text(section_name)
         try:
-            pdf.cell(0, 10, section_name, new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 10, s_name, new_x="LMARGIN", new_y="NEXT")
         except:
-            pdf.cell(0, 10, section_name, ln=True)
+            pdf.cell(0, 10, s_name, ln=True)
         pdf.ln(2)
         
         if is_college_exam:
             for item in section_items:
                 marks = item.marks_override if item.marks_override is not None else item.marks_snapshot
-                correct_answer = item.content_snapshot.get("correct_answer", "N/A")
-                explanation = item.content_snapshot.get("explanation", "N/A")
+                correct_answer = _clean_text(str(item.content_snapshot.get("correct_answer", "N/A")))
+                explanation = _clean_text(str(item.content_snapshot.get("explanation", "N/A")))
                 
                 pdf.set_font("Helvetica", "B", 12)
                 try:
@@ -109,14 +131,14 @@ def export_answer_key_pdf(paper: QuestionPaper) -> io.BytesIO:
                 pdf.set_font("Helvetica", "B", 11)
                 pdf.cell(35, 6, "Correct Answer: ")
                 pdf.set_font("Helvetica", "", 11)
-                pdf.multi_cell(0, 6, str(correct_answer))
+                pdf.multi_cell(0, 6, correct_answer)
                 pdf.set_x(pdf.l_margin)
                 
                 if explanation and explanation != "N/A":
                     pdf.set_font("Helvetica", "B", 11)
                     pdf.cell(30, 6, "Explanation: ")
                     pdf.set_font("Helvetica", "", 11)
-                    pdf.multi_cell(0, 6, str(explanation))
+                    pdf.multi_cell(0, 6, explanation)
                     pdf.set_x(pdf.l_margin)
                 
                 pdf.set_font("Helvetica", "B", 11)
@@ -147,9 +169,9 @@ def export_answer_key_pdf(paper: QuestionPaper) -> io.BytesIO:
             for i in range(0, len(section_items), items_per_row):
                 row_items = section_items[i:i+items_per_row]
                 for j, item in enumerate(row_items):
-                    correct_answer = item.content_snapshot.get("correct_answer", "N/A")
+                    correct_answer = _clean_text(str(item.content_snapshot.get("correct_answer", "N/A")))
                     pdf.cell(q_width, 8, str(question_number + j), border=1, align='C')
-                    pdf.cell(a_width, 8, str(correct_answer), border=1, align='C')
+                    pdf.cell(a_width, 8, correct_answer, border=1, align='C')
                 
                 # If the last row isn't full, pad with empty cells
                 if len(row_items) < cols:
@@ -162,7 +184,11 @@ def export_answer_key_pdf(paper: QuestionPaper) -> io.BytesIO:
             pdf.ln(4)
             
     buffer = io.BytesIO()
-    pdf.output(buffer)
+    try:
+        buffer.write(pdf.output())
+    except TypeError:
+        buffer.write(pdf.output(dest='S').encode('latin1'))
     buffer.seek(0)
     return buffer
+
 

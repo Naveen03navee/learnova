@@ -58,7 +58,10 @@ export default function AuthPage() {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } },
+      options: { 
+        data: { full_name: fullName },
+        emailRedirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
+      },
     });
     setLoading(false);
     if (error) {
@@ -97,20 +100,20 @@ export default function AuthPage() {
       <div className="auth-left">
         <div className="auth-left-inner">
           <div className="auth-brand">
-            <Image 
-              src="/logo-light.png" 
-              alt="Learnova Logo" 
-              width={200} 
-              height={60} 
-              className="dark:hidden object-contain h-[48px] w-auto" 
+            <Image
+              src="/logo-light.png"
+              alt="Learnova Logo"
+              width={200}
+              height={60}
+              className="dark:hidden object-contain h-[48px] w-auto"
               priority
             />
-            <Image 
-              src="/logo-dark.png" 
-              alt="Learnova Logo" 
-              width={200} 
-              height={60} 
-              className="hidden dark:block object-contain h-[48px] w-auto" 
+            <Image
+              src="/logo-dark.png"
+              alt="Learnova Logo"
+              width={200}
+              height={60}
+              className="hidden dark:block object-contain h-[48px] w-auto"
               priority
             />
           </div>
@@ -252,7 +255,7 @@ export default function AuthPage() {
                 <input suppressHydrationWarning
                   type="text"
                   className="auth-input"
-                  placeholder="Dr. Jane Smith"
+                  placeholder="YOUR NAME "
                   value={fullName}
                   onChange={e => setFullName(e.target.value)}
                   required
@@ -265,7 +268,7 @@ export default function AuthPage() {
                 <input suppressHydrationWarning
                   type="email"
                   className="auth-input"
-                  placeholder="teacher@institution.edu"
+                  placeholder="YOUR MAIL ID"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required
