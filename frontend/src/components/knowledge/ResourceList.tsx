@@ -137,6 +137,8 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
     );
   }
 
+  const [shareOpenId, setShareOpenId] = useState<string | null>(null);
+
   return (
     <div className="flex flex-col space-y-2">
       {resources.map((resource: any) => (
@@ -164,6 +166,13 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
           </div>
           
           <div className="flex items-center gap-2">
+            <ShareDialog 
+              entityType="resource" 
+              entityId={resource.id} 
+              open={shareOpenId === resource.id}
+              onOpenChange={(o) => setShareOpenId(o ? resource.id : null)}
+              trigger={null}
+            />
             <DropdownMenu>
               <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-muted outline-none">
                 <MoreVerticalIcon className="h-4 w-4 text-muted-foreground" />
@@ -182,12 +191,11 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
                 )}
                 
                 {resource.access?.level === 'OWNER' && !resource.access?.is_global && (
-                  <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="p-0">
-                    <div className="w-full">
-                      <ShareDialog entityType="resource" entityId={resource.id} trigger={<button className="w-full text-left flex items-center px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground rounded-sm cursor-default"><ShareDialogIcon className="w-4 h-4 mr-2" /> Share</button>} />
-                    </div>
+                  <DropdownMenuItem onSelect={() => setShareOpenId(resource.id)}>
+                    <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
                   </DropdownMenuItem>
                 )}
+
                 
                 {resource.access?.has_edit && (
                   <DropdownMenuItem className="text-red-600" onClick={() => {

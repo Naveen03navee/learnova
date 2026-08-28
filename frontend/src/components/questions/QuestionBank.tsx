@@ -77,6 +77,8 @@ export function QuestionBank() {
     );
   }
 
+  const [shareOpenId, setShareOpenId] = useState<string | null>(null);
+
   return (
     <div className="flex flex-col h-full gap-4">
       {/* Search and Action Bar */}
@@ -114,6 +116,13 @@ export function QuestionBank() {
                   <AccessBadge access={q.access} />
                 </div>
                 <div className="flex gap-2">
+                  <ShareDialog 
+                    entityType="question" 
+                    entityId={q.id} 
+                    open={shareOpenId === q.id}
+                    onOpenChange={(o) => setShareOpenId(o ? q.id : null)}
+                    trigger={null}
+                  />
                   <DropdownMenu>
                     <DropdownMenuTrigger className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground outline-none">
                       <MoreVerticalIcon className="h-4 w-4" />
@@ -126,10 +135,8 @@ export function QuestionBank() {
                       )}
                       
                       {q.access?.level === 'OWNER' && !q.access?.is_global && (
-                        <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="p-0">
-                          <div className="w-full">
-                            <ShareDialog entityType="question" entityId={q.id} trigger={<button className="w-full text-left flex items-center px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground rounded-sm cursor-default"><ShareDialogIcon className="w-4 h-4 mr-2" /> Share</button>} />
-                          </div>
+                        <DropdownMenuItem onSelect={() => setShareOpenId(q.id)}>
+                          <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
                         </DropdownMenuItem>
                       )}
                       

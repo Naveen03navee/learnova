@@ -391,7 +391,18 @@ async def export_paper_question_paper_pdf(
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    paper = await _get_paper_for_export(db, paper_id, user_id)
+    await require_view_access(db, "paper", paper_id, uuid.UUID(user_id))
+    
+    result = await db.execute(
+        select(QuestionPaper)
+        .options(selectinload(QuestionPaper.items), selectinload(QuestionPaper.exam), selectinload(QuestionPaper.subject))
+        .where(QuestionPaper.id == paper_id)
+    )
+    paper = result.scalar_one_or_none()
+    
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+        
     if paper.status != PaperStatus.APPROVED:
         raise HTTPException(status_code=400, detail="Only APPROVED papers can be exported.")
         

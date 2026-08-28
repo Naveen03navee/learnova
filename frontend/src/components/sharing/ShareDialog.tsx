@@ -18,11 +18,16 @@ interface SharePermission {
 interface ShareDialogProps {
   entityType: "exam" | "resource" | "pattern" | "question" | "paper";
   entityId: string;
-  trigger?: React.ReactElement;
+  trigger?: React.ReactElement | null;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function ShareDialog({ entityType, entityId, trigger }: ShareDialogProps) {
-  const [open, setOpen] = useState(false);
+export function ShareDialog({ entityType, entityId, trigger, open: controlledOpen, onOpenChange: controlledOnOpenChange }: ShareDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = controlledOnOpenChange || setInternalOpen;
+  
   const [shares, setShares] = useState<SharePermission[]>([]);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
@@ -99,16 +104,18 @@ export function ShareDialog({ entityType, entityId, trigger }: ShareDialogProps)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger 
-        render={
-          trigger || (
-            <Button variant="outline" size="sm" className="h-8 gap-1">
-              <Share2 className="h-4 w-4" />
-              <span>Share</span>
-            </Button>
-          )
-        }
-      />
+      {trigger !== null && (
+        <DialogTrigger 
+          render={
+            trigger || (
+              <Button variant="outline" size="sm" className="h-8 gap-1">
+                <Share2 className="h-4 w-4" />
+                <span>Share</span>
+              </Button>
+            )
+          }
+        />
+      )}
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Share {entityType}</DialogTitle>
