@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { Share2, Trash2, Loader2, UserPlus } from "lucide-react";
-import { toast } from "sonner";
+import { notify } from "@/store/notificationStore";
 
 interface SharePermission {
   id: string;
@@ -66,13 +66,11 @@ export function ShareDialog({ entityType, entityId, trigger, open: controlledOpe
         shared_with_email: email,
         permission_level: level
       });
-      toast.success(`Shared with ${email}`);
+      notify.success(`Shared with ${email}`);
       setEmail("");
       fetchShares();
     } catch (error: any) {
-      toast.error("Failed to share", {
-        description: error.response?.data?.detail || error.message
-      });
+      notify.error("Failed to share", error.response?.data?.detail || error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -81,24 +79,20 @@ export function ShareDialog({ entityType, entityId, trigger, open: controlledOpe
   const handleRevoke = async (shareId: string) => {
     try {
       await api.delete(`/api/v1/shares/${shareId}`);
-      toast.success("Access revoked");
+      notify.success("Access revoked");
       setShares(shares.filter(s => s.id !== shareId));
     } catch (error: any) {
-      toast.error("Failed to revoke access", {
-        description: error.response?.data?.detail || error.message
-      });
+      notify.error("Failed to revoke access", error.response?.data?.detail || error.message);
     }
   };
 
   const updateLevel = async (shareId: string, newLevel: "VIEW" | "EDIT") => {
     try {
       await api.put(`/api/v1/shares/${shareId}`, { permission_level: newLevel });
-      toast.success("Permission updated");
+      notify.success("Permission updated");
       fetchShares();
     } catch (error: any) {
-      toast.error("Failed to update permission", {
-        description: error.response?.data?.detail || error.message
-      });
+      notify.error("Failed to update permission", error.response?.data?.detail || error.message);
     }
   };
 
