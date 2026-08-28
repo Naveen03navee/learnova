@@ -272,7 +272,7 @@ export default function PatternsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {pattern.access?.level === 'OWNER' && !pattern.access?.is_global && (
-                              <DropdownMenuItem onSelect={() => setShareOpenId(pattern.id)}>
+                              <DropdownMenuItem onSelect={() => setTimeout(() => setShareOpenId(pattern.id), 100)}>
                                 <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
                               </DropdownMenuItem>
                             )}

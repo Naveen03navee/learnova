@@ -192,7 +192,7 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
                 )}
                 
                 {resource.access?.level === 'OWNER' && !resource.access?.is_global && (
-                  <DropdownMenuItem onSelect={() => setShareOpenId(resource.id)}>
+                  <DropdownMenuItem onSelect={() => setTimeout(() => setShareOpenId(resource.id), 100)}>
                     <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
                   </DropdownMenuItem>
                 )}

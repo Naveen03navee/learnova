@@ -135,7 +135,7 @@ export function QuestionBank() {
                       )}
                       
                       {q.access?.level === 'OWNER' && !q.access?.is_global && (
-                        <DropdownMenuItem onSelect={() => setShareOpenId(q.id)}>
+                        <DropdownMenuItem onSelect={() => setTimeout(() => setShareOpenId(q.id), 100)}>
                           <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
                         </DropdownMenuItem>
                       )}

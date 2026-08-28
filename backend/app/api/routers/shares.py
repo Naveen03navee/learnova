@@ -71,8 +71,8 @@ async def create_share(
         entity_type=request.entity_type,
         entity_id=request.entity_id,
         shared_with_id=target_profile.id,
-        permission_level=request.permission_level,
-        granted_by_id=user_uuid
+        permission=request.permission_level,
+        shared_by_id=user_uuid
     )
     
     db.add(new_share)
@@ -85,7 +85,7 @@ async def create_share(
         entity_id=new_share.entity_id,
         shared_with_id=new_share.shared_with_id,
         shared_with_email=target_profile.email,
-        permission_level=new_share.permission_level
+        permission_level=new_share.permission
     )
 
 @router.get("/{entity_type}/{entity_id}", response_model=List[ShareResponse])
@@ -117,7 +117,7 @@ async def list_shares(
             entity_id=share.entity_id,
             shared_with_id=share.shared_with_id,
             shared_with_email=email,
-            permission_level=share.permission_level
+            permission_level=share.permission
         ))
         
     return shares
@@ -140,7 +140,7 @@ async def update_share(
     # Require ownership of the shared entity to modify its shares
     await require_owner_access(db, share.entity_type, share.entity_id, user_uuid)
     
-    share.permission_level = request.permission_level
+    share.permission = request.permission_level
     await db.commit()
     await db.refresh(share)
     
@@ -154,7 +154,7 @@ async def update_share(
         entity_id=share.entity_id,
         shared_with_id=share.shared_with_id,
         shared_with_email=email,
-        permission_level=share.permission_level
+        permission_level=share.permission
     )
 
 @router.delete("/{share_id}", status_code=status.HTTP_204_NO_CONTENT)
