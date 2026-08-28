@@ -259,22 +259,21 @@ export default function PatternsPage() {
                             <ChevronDown className="w-4 h-4" />
                         </CollapsibleTrigger>
                         
-                        <ShareDialog 
-                          entityType="pattern" 
-                          entityId={pattern.id} 
-                          open={shareOpenId === pattern.id}
-                          onOpenChange={(o) => setShareOpenId(o ? pattern.id : null)}
-                          trigger={null}
-                        />
                         <DropdownMenu>
                           <DropdownMenuTrigger className="h-8 w-8 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground outline-none">
                             <MoreVerticalIcon className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {pattern.access?.level === 'OWNER' && !pattern.access?.is_global && (
-                              <DropdownMenuItem onSelect={() => setTimeout(() => setShareOpenId(pattern.id), 100)}>
-                                <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
-                              </DropdownMenuItem>
+                              <ShareDialog 
+                                entityType="pattern" 
+                                entityId={pattern.id} 
+                                trigger={
+                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                    <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
+                                  </DropdownMenuItem>
+                                }
+                              />
                             )}
                             
                             {pattern.access?.has_edit && (

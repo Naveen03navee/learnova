@@ -167,13 +167,7 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
           </div>
           
           <div className="flex items-center gap-2">
-            <ShareDialog 
-              entityType="resource" 
-              entityId={resource.id} 
-              open={shareOpenId === resource.id}
-              onOpenChange={(o) => setShareOpenId(o ? resource.id : null)}
-              trigger={null}
-            />
+
             <DropdownMenu>
               <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-muted outline-none">
                 <MoreVerticalIcon className="h-4 w-4 text-muted-foreground" />
@@ -192,9 +186,15 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
                 )}
                 
                 {resource.access?.level === 'OWNER' && !resource.access?.is_global && (
-                  <DropdownMenuItem onSelect={() => setTimeout(() => setShareOpenId(resource.id), 100)}>
-                    <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
-                  </DropdownMenuItem>
+                  <ShareDialog 
+                    entityType="resource" 
+                    entityId={resource.id} 
+                    trigger={
+                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                        <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
+                      </DropdownMenuItem>
+                    }
+                  />
                 )}
 
                 
