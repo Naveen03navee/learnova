@@ -32,13 +32,18 @@ export default function AuthPage() {
     e.preventDefault();
     resetMessages();
     setLoading(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else {
-      router.push('/workspace');
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      setLoading(false);
+      if (error) {
+        setError(error.message);
+      } else {
+        router.push('/workspace');
+      }
+    } catch (err: any) {
+      setLoading(false);
+      setError(err.message || 'An unexpected error occurred during sign in.');
     }
   };
 
@@ -54,21 +59,26 @@ export default function AuthPage() {
       return;
     }
     setLoading(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { 
-        data: { full_name: fullName },
-        emailRedirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
-      },
-    });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else {
-      setSuccess('Account created! Check your email to confirm, or sign in if auto-confirmed.');
-      setMode('login');
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { 
+          data: { full_name: fullName },
+          emailRedirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
+        },
+      });
+      setLoading(false);
+      if (error) {
+        setError(error.message);
+      } else {
+        setSuccess('Account created! Check your email to confirm, or sign in if auto-confirmed.');
+        setMode('login');
+      }
+    } catch (err: any) {
+      setLoading(false);
+      setError(err.message || 'An unexpected error occurred during registration.');
     }
   };
 
@@ -77,15 +87,20 @@ export default function AuthPage() {
     resetMessages();
     if (!email) { setError('Please enter your email address.'); return; }
     setLoading(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`,
-    });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else {
-      setSuccess('Password reset link sent! Check your inbox.');
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+      setLoading(false);
+      if (error) {
+        setError(error.message);
+      } else {
+        setSuccess('Password reset link sent! Check your inbox.');
+      }
+    } catch (err: any) {
+      setLoading(false);
+      setError(err.message || 'An unexpected error occurred.');
     }
   };
 
