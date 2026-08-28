@@ -25,6 +25,7 @@ type ResourceListProps = {
 export default function ResourceList({ examId, subjectId, folderId }: ResourceListProps) {
   const queryClient = useQueryClient();
   const notify = useNotificationStore(s => s.notify);
+  const [shareOpenId, setShareOpenId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['resources', examId, subjectId, folderId],
@@ -157,15 +158,14 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
                 <span>•</span>
                 <span>{(resource.file_size / 1024 / 1024).toFixed(2)} MB</span>
                 <span>•</span>
-                <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium">
-                  {getStatusDisplay(resource.status)}
-                </span>
+                <span>{new Date(resource.created_at).toLocaleDateString()}</span>
               </div>
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
-
+          <div className="flex items-center space-x-4 shrink-0 pl-4">
+            {getStatusDisplay(resource.status)}
+            
             <DropdownMenu>
               <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-muted outline-none">
                 <MoreVerticalIcon className="h-4 w-4 text-muted-foreground" />
@@ -184,21 +184,10 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
                 )}
                 
                 {resource.access?.level === 'OWNER' && !resource.access?.is_global && (
-                  <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="p-0">
-                    <div className="w-full">
-                      <ShareDialog 
-                        entityType="resource" 
-                        entityId={resource.id} 
-                        trigger={
-                          <button className="w-full text-left flex items-center px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground rounded-sm cursor-default">
-                            <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
-                          </button>
-                        }
-                      />
-                    </div>
+                  <DropdownMenuItem onSelect={() => setShareOpenId(resource.id)}>
+                    <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
                   </DropdownMenuItem>
                 )}
-
                 
                 {resource.access?.has_edit && (
                   <DropdownMenuItem className="text-red-600" onClick={() => {
@@ -211,6 +200,17 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {resource.access?.level === 'OWNER' && !resource.access?.is_global && (
+              <ShareDialog 
+                entityType="resource" 
+                entityId={resource.id} 
+                open={shareOpenId === resource.id}
+                onOpenChange={(isOpen) => {
+                  if (!isOpen) setShareOpenId(null);
+                }}
+              />
+            )}
           </div>
         </div>
       ))}

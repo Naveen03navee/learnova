@@ -28,6 +28,7 @@ export function QuestionBank() {
   // Dialog state
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<any>(null);
+  const [shareOpenId, setShareOpenId] = useState<string | null>(null);
   
   const queryClient = useQueryClient();
   const notify = useNotificationStore(s => s.notify);
@@ -129,15 +130,9 @@ export function QuestionBank() {
                       )}
                       
                       {q.access?.level === 'OWNER' && !q.access?.is_global && (
-                        <ShareDialog 
-                          entityType="question" 
-                          entityId={q.id} 
-                          trigger={
-                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                              <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
-                            </DropdownMenuItem>
-                          }
-                        />
+                        <DropdownMenuItem onSelect={() => setShareOpenId(q.id)}>
+                          <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
+                        </DropdownMenuItem>
                       )}
                       
                       {q.access?.level === 'OWNER' && (
@@ -147,6 +142,17 @@ export function QuestionBank() {
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
+
+                  {q.access?.level === 'OWNER' && !q.access?.is_global && (
+                    <ShareDialog 
+                      entityType="question" 
+                      entityId={q.id} 
+                      open={shareOpenId === q.id}
+                      onOpenChange={(isOpen) => {
+                        if (!isOpen) setShareOpenId(null);
+                      }}
+                    />
+                  )}
                 </div>
               </CardTitle>
             </CardHeader>

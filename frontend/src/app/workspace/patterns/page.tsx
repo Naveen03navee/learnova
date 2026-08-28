@@ -265,18 +265,8 @@ export default function PatternsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {pattern.access?.level === 'OWNER' && !pattern.access?.is_global && (
-                              <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="p-0">
-                                <div className="w-full">
-                                  <ShareDialog 
-                                    entityType="pattern" 
-                                    entityId={pattern.id} 
-                                    trigger={
-                                      <button className="w-full text-left flex items-center px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground rounded-sm cursor-default">
-                                        <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
-                                      </button>
-                                    }
-                                  />
-                                </div>
+                              <DropdownMenuItem onSelect={() => setShareOpenId(pattern.id)}>
+                                <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
                               </DropdownMenuItem>
                             )}
                             
@@ -287,6 +277,17 @@ export default function PatternsPage() {
                             )}
                           </DropdownMenuContent>
                         </DropdownMenu>
+
+                        {pattern.access?.level === 'OWNER' && !pattern.access?.is_global && (
+                          <ShareDialog 
+                            entityType="pattern" 
+                            entityId={pattern.id} 
+                            open={shareOpenId === pattern.id}
+                            onOpenChange={(isOpen) => {
+                              if (!isOpen) setShareOpenId(null);
+                            }}
+                          />
+                        )}
                       </div>
                     </div>
                   </div>
