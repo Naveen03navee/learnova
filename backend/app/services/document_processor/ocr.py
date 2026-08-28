@@ -46,22 +46,45 @@ def extract_pdf_ocr(file_bytes: bytes) -> str:
         from google import genai
         from google.genai import types
         from app.core.config import settings
+        import time
         
         api_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "")
         if api_key:
             client = genai.Client(api_key=api_key)
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=[
-                    types.Part.from_bytes(data=file_bytes, mime_type="application/pdf"),
-                    "Extract all text, questions, options, mathematical equations, and structural contents from this scanned document verbatim. Do not summarize or alter the text."
-                ]
-            )
-            if response.text and response.text.strip():
-                logger.info("Successfully extracted text using Gemini Vision OCR.")
-                return response.text
-    except Exception as gemini_err:
-        logger.error(f"Gemini Vision OCR failed: {gemini_err}")
+            contents = [
+                types.Part.from_bytes(data=file_bytes, mime_type="application/pdf"),
+                "Extract all text, questions, options, mathematical equations, and structural contents from this scanned document verbatim. Do not summarize or alter the text."
+            ]
+            
+            # Retry logic with fallback models
+            models_to_try = ["gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"]
+            last_err = None
+            
+            for model_name in models_to_try:
+                for attempt in range(3):
+                    try:
+                        logger.info(f"Attempting Gemini OCR with model {model_name} (Attempt {attempt+1}/3)")
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=contents
+                        )
+                        if response.text and response.text.strip():
+                            logger.info(f"Successfully extracted text using Gemini Vision OCR ({model_name}).")
+                            return response.text
+                        break # If response is empty but successful, don't retry same model
+                    except Exception as gemini_err:
+                        last_err = gemini_err
+                        err_str = str(gemini_err).lower()
+                        if "503" in err_str or "unavailable" in err_str or "429" in err_str:
+                            logger.warning(f"Model {model_name} overloaded (503/429). Retrying in {2 ** attempt}s...")
+                            time.sleep(2 ** attempt)
+                        else:
+                            # Not a transient error, break inner loop to try next model
+                            break
+            
+            logger.error(f"Gemini Vision OCR failed after all retries/models. Last error: {last_err}")
+    except Exception as general_err:
+        logger.error(f"Failed to initialize Gemini for OCR: {general_err}")
 
     return ""
 
