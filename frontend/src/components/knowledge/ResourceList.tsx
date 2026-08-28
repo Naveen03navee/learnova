@@ -138,8 +138,6 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
     );
   }
 
-  const [shareOpenId, setShareOpenId] = useState<string | null>(null);
-
   return (
     <div className="flex flex-col space-y-2">
       {resources.map((resource: any) => (
