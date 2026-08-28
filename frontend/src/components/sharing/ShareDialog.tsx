@@ -40,9 +40,7 @@ export function ShareDialog({ entityType, entityId, trigger, open: controlledOpe
       const { data } = await api.get(`/api/v1/shares/${entityType}/${entityId}`);
       setShares(data);
     } catch (error: any) {
-      toast.error("Failed to load sharing settings", {
-        description: error.response?.data?.detail || error.message
-      });
+      notify.error("Failed to load sharing settings", error.response?.data?.detail || error.message);
     } finally {
       setLoading(false);
     }
