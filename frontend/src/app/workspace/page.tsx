@@ -18,13 +18,13 @@ import { parseUtc } from "@/lib/date";
 
 export default function WorkspaceDashboard() {
   const { examId, subjectId } = useWorkspaceStore();
-  const [userName, setUserName] = useState("Teacher");
+  const [userName, setUserName] = useState("");
 
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
-        setUserName(user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || "Teacher");
+        setUserName(user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || "");
       }
     });
   }, []);
@@ -65,7 +65,7 @@ export default function WorkspaceDashboard() {
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-600 p-8 text-white shadow-lg">
         <div className="relative z-10">
           <h1 className="text-3xl font-bold tracking-tight text-white mb-2">
-            Welcome back, {userName}
+            Welcome back{userName ? `, ${userName}` : ''}
           </h1>
           <p className="text-indigo-100 max-w-xl text-lg">
             Here's what's happening in your Learnova workspace today. Select an exam and subject to start building your question bank.

@@ -69,17 +69,17 @@ export function ProfileMenu() {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => router.push("/workspace/profile")} className="gap-2">
+          <DropdownMenuItem onSelect={() => router.push("/workspace/profile")} className="gap-2">
             <UserCircle size={15} /> Profile
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => router.push("/workspace/settings")} className="gap-2">
+          <DropdownMenuItem onSelect={() => router.push("/workspace/settings")} className="gap-2">
             <Settings size={15} /> Settings
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem
-            onClick={handleLogout}
+            onSelect={handleLogout}
             className="text-destructive focus:text-destructive focus:bg-destructive/10 gap-2"
           >
             <LogOut size={15} /> Sign Out
