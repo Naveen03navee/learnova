@@ -186,15 +186,19 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
                 )}
                 
                 {resource.access?.level === 'OWNER' && !resource.access?.is_global && (
-                  <ShareDialog 
-                    entityType="resource" 
-                    entityId={resource.id} 
-                    trigger={
-                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                        <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
-                      </DropdownMenuItem>
-                    }
-                  />
+                  <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="p-0">
+                    <div className="w-full">
+                      <ShareDialog 
+                        entityType="resource" 
+                        entityId={resource.id} 
+                        trigger={
+                          <button className="w-full text-left flex items-center px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground rounded-sm cursor-default">
+                            <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
+                          </button>
+                        }
+                      />
+                    </div>
+                  </DropdownMenuItem>
                 )}
 
                 
