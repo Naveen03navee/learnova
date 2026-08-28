@@ -19,27 +19,45 @@ def extract_pdf_ocr(file_bytes: bytes) -> str:
     Extracts text from scanned/image PDFs.
     Attempts local Tesseract OCR first, then seamlessly falls back to Gemini Vision OCR.
     """
-    # 1. Try local Tesseract OCR
-    try:
-        doc = fitz.open(stream=file_bytes, filetype="pdf")
-        full_text = []
-        zoom = 2.0
-        mat = fitz.Matrix(zoom, zoom)
+    # 1. Try local Tesseract OCR if available
+    import shutil
+    tess_cmd = pytesseract.pytesseract.tesseract_cmd
+    tess_exists = False
+    
+    if os.path.exists(tess_cmd):
+        tess_exists = True
+    elif shutil.which(tess_cmd):
+        tess_exists = True
         
-        for page_num in range(len(doc)):
-            page = doc[page_num]
-            pix = page.get_pixmap(matrix=mat, alpha=False)
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            text = pytesseract.image_to_string(img)
-            if text.strip():
-                full_text.append(text)
+    if tess_exists:
+        try:
+            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+                full_text = []
+                zoom = 2.0
+                mat = fitz.Matrix(zoom, zoom)
                 
-        doc.close()
-        extracted = "\n\n".join(full_text)
-        if extracted.strip():
-            return extracted
-    except Exception as e:
-        logger.warning(f"Local Tesseract OCR unavailable or failed: {e}. Trying Gemini Vision OCR.")
+                for page_num in range(len(doc)):
+                    page = doc[page_num]
+                    pix = page.get_pixmap(matrix=mat, alpha=False)
+                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    
+                    try:
+                        text = pytesseract.image_to_string(img)
+                        if text.strip():
+                            full_text.append(text)
+                    finally:
+                        # Explicitly free memory for large image objects
+                        del img
+                        del pix
+                        page = None
+                        
+                extracted = "\n\n".join(full_text)
+                if extracted.strip():
+                    return extracted
+        except Exception as e:
+            logger.warning(f"Local Tesseract OCR failed: {e}. Trying Gemini Vision OCR.")
+    else:
+        logger.info("Tesseract not found. Skipping local OCR and using Gemini Vision OCR directly.")
 
     # 2. Gemini Multimodal AI Vision OCR fallback (serverless & works in cloud without local binaries)
     try:
