@@ -78,7 +78,6 @@ export function QuestionBank() {
     );
   }
 
-  const [shareOpenId, setShareOpenId] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col h-full gap-4">

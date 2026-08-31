@@ -20,8 +20,10 @@ from app.api.deps import get_current_user
 from app.core.authorization import require_view_access, require_edit_access, require_owner_access, get_entity_access
 from app.services.pattern_analysis import analyze_pattern, extract_pattern_questions
 from app.services.document_processor.orchestrator import _embed_sync, _extract_sync
+from app.services.generation.events import event_bus, GenerationEvent
 import asyncio
 import logging
+from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +39,23 @@ async def process_pattern_background(pattern_id: UUID):
         pattern.status = PatternStatus.ANALYZING
         await db.commit()
         
+        sid = str(pattern_id)
         try:
+            await event_bus.publish(sid, GenerationEvent(
+                status="ANALYZING",
+                event_type="INITIALIZING",
+                message="Initializing pattern analysis...",
+                progress=0.1
+            ))
+            
             supabase = get_supabase_service_client()
+            
+            await event_bus.publish(sid, GenerationEvent(
+                status="ANALYZING",
+                event_type="EXTRACTING",
+                message="Downloading and extracting document...",
+                progress=0.2
+            ))
             file_bytes = await asyncio.to_thread(download_file_from_storage, supabase, pattern.file_path)
                 
             file_ext = pattern.file_name.split('.')[-1].lower() if '.' in pattern.file_name else ''
@@ -54,16 +71,40 @@ async def process_pattern_background(pattern_id: UUID):
                 logger.error(f"Failed to extract text from pattern {pattern.id}")
                 pattern.status = PatternStatus.FAILED
                 await db.commit()
+                await event_bus.publish(sid, GenerationEvent(
+                    status="FAILED",
+                    event_type="EXTRACTION_FAILED",
+                    message="Failed to extract text from the document.",
+                    progress=1.0
+                ))
                 return
 
+            await event_bus.publish(sid, GenerationEvent(
+                status="ANALYZING",
+                event_type="ANALYZING",
+                message="Analyzing exam pattern and structure using AI...",
+                progress=0.4
+            ))
             analysis_data = await analyze_pattern(pattern, text_content)
             
             if analysis_data and (analysis_data.question_count > 0 or analysis_data.total_marks > 0 or len(analysis_data.sections) > 0):
                 pattern.analysis_data = analysis_data.model_dump()
                 
+                await event_bus.publish(sid, GenerationEvent(
+                    status="ANALYZING",
+                    event_type="EXTRACTING",
+                    message="Extracting representative sample questions...",
+                    progress=0.6
+                ))
                 # Output B - Extract and embed representative questions
                 questions = await extract_pattern_questions(pattern, text_content)
                 if questions:
+                    await event_bus.publish(sid, GenerationEvent(
+                        status="ANALYZING",
+                        event_type="EMBEDDING",
+                        message=f"Generating embeddings for {len(questions)} sample questions...",
+                        progress=0.8
+                    ))
                     contents = [q.content for q in questions]
                     embeddings = await asyncio.to_thread(_embed_sync, contents)
                     
@@ -87,14 +128,32 @@ async def process_pattern_background(pattern_id: UUID):
                         db.add_all(chunks_to_add)
 
                 pattern.status = PatternStatus.ACTIVE
+                await event_bus.publish(sid, GenerationEvent(
+                    status="READY",
+                    event_type="ANALYSIS_COMPLETED",
+                    message="Pattern analysis completed successfully.",
+                    progress=1.0
+                ))
             else:
                 pattern.status = PatternStatus.FAILED
                 if analysis_data:
                     pattern.analysis_data = analysis_data.model_dump()
+                await event_bus.publish(sid, GenerationEvent(
+                    status="FAILED",
+                    event_type="ANALYSIS_FAILED",
+                    message="Failed to identify exam structure. Please upload a valid sample paper.",
+                    progress=1.0
+                ))
                 
         except Exception as e:
             logger.error(f"Pattern background processing failed: {e}")
             pattern.status = PatternStatus.FAILED
+            await event_bus.publish(sid, GenerationEvent(
+                status="FAILED",
+                event_type="ERROR",
+                message=f"An unexpected error occurred: {str(e)}",
+                progress=1.0
+            ))
             
         await db.commit()
 
@@ -251,8 +310,7 @@ async def delete_pattern(
 ):
     await require_edit_access(db, "pattern", pattern_id, UUID(user_id))
     
-    query = select(ExamPattern).where(ExamPattern.id == pattern_id)
-    result = await db.execute(query)
+    result = await db.execute(select(ExamPattern).where(ExamPattern.id == pattern_id))
     pattern = result.scalar_one_or_none()
     
     if not pattern:
@@ -269,3 +327,29 @@ async def delete_pattern(
     await db.commit()
     
     return None
+
+async def pattern_event_stream(pattern_id: UUID):
+    sid = str(pattern_id)
+    try:
+        async for event in event_bus.subscribe(sid):
+            yield f"data: {event.model_dump_json()}\n\n"
+    except asyncio.CancelledError:
+        event_bus.unsubscribe(sid)
+
+@router.get("/patterns/{pattern_id}/events")
+async def stream_pattern_events(
+    pattern_id: UUID,
+    user_id: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    await require_view_access(db, "pattern", pattern_id, UUID(user_id))
+    
+    return StreamingResponse(
+        pattern_event_stream(pattern_id), 
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )

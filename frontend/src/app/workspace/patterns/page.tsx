@@ -18,6 +18,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
+import { PatternProgressTerminal } from "@/components/patterns/PatternProgressTerminal";
 import {
   Dialog,
   DialogContent,
@@ -101,28 +102,34 @@ export default function PatternsPage() {
   const [shareOpenId, setShareOpenId] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [year, setYear] = useState('');
+  const [uploadedPatternId, setUploadedPatternId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = async () => {
     if (!selectedFile || !examId || !subjectId) return;
     setUploading(true);
+    setUploadedPatternId(null);
     try {
       const form = new FormData();
       form.append('file', selectedFile);
       form.append('exam_id', examId);
       form.append('subject_id', subjectId);
       if (year) form.append('year', year);
-      await api.post('/api/v1/patterns/upload', form);
-      notify.success('Pattern uploaded', 'The sample paper is being analyzed in the background.');
-      setUploadOpen(false);
+      const res = await api.post('/api/v1/patterns/upload', form);
+      const data = res.data;
+      setUploadedPatternId(data.id);
       setSelectedFile(null);
       setYear('');
-      queryClient.invalidateQueries({ queryKey: ['patterns', examId, subjectId] });
     } catch (err: any) {
       notify.error('Upload failed', err?.response?.data?.detail || err.message);
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleProcessingComplete = () => {
+    setUploadedPatternId(null);
+    setUploadOpen(false);
   };
 
   const handleDelete = async () => {
@@ -345,61 +352,74 @@ export default function PatternsPage() {
               </p>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Year (optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 2023"
-                  value={year}
-                  onChange={e => setYear(e.target.value)}
-                  className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">File</label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.docx,.doc,.png,.jpg,.jpeg"
-                  className="hidden"
-                  onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
-                />
-                {selectedFile ? (
-                  <div className="flex items-center justify-between border rounded-md px-3 py-2 bg-muted/30">
-                    <span className="text-sm truncate">{selectedFile.name}</span>
-                    <button onClick={() => setSelectedFile(null)} className="ml-2 text-muted-foreground hover:text-destructive text-xs">✕</button>
+            {!uploadedPatternId ? (
+              <>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium mb-1.5 block">Year (optional)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 2023"
+                      value={year}
+                      onChange={e => setYear(e.target.value)}
+                      className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    />
                   </div>
-                ) : (
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full border-2 border-dashed border-muted-foreground/30 rounded-md px-4 py-6 text-sm text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors text-center"
-                  >
-                    <UploadIcon className="w-5 h-5 mx-auto mb-2 opacity-50" />
-                    Click to select a file
-                  </button>
-                )}
-              </div>
-            </div>
 
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => { setUploadOpen(false); setSelectedFile(null); setYear(''); }}
-                disabled={uploading}
-              >
-                Cancel
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={handleUpload}
-                disabled={!selectedFile || uploading}
-              >
-                {uploading ? 'Uploading...' : 'Upload'}
-              </Button>
-            </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1.5 block">File</label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.docx,.doc,.png,.jpg,.jpeg"
+                      className="hidden"
+                      onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
+                    />
+                    {selectedFile ? (
+                      <div className="flex items-center justify-between border rounded-md px-3 py-2 bg-muted/30">
+                        <span className="text-sm truncate">{selectedFile.name}</span>
+                        <button onClick={() => setSelectedFile(null)} className="ml-2 text-muted-foreground hover:text-destructive text-xs">✕</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full border-2 border-dashed border-muted-foreground/30 rounded-md px-4 py-6 text-sm text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors text-center"
+                      >
+                        <UploadIcon className="w-5 h-5 mx-auto mb-2 opacity-50" />
+                        Click to select a file
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => { setUploadOpen(false); setSelectedFile(null); setYear(''); }}
+                    disabled={uploading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={handleUpload}
+                    disabled={!selectedFile || uploading}
+                  >
+                    {uploading ? 'Uploading...' : 'Upload'}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="mt-2">
+                <PatternProgressTerminal
+                  patternId={uploadedPatternId}
+                  examId={examId!}
+                  subjectId={subjectId!}
+                  onComplete={handleProcessingComplete}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -14,6 +14,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { FileIcon, UploadCloudIcon, FolderOpen, Loader2Icon, XIcon } from 'lucide-react';
+import { ResourceProgressTerminal } from './ResourceProgressTerminal';
 
 type UploadResourceDialogProps = {
   open: boolean;
@@ -27,6 +28,7 @@ export default function UploadResourceDialog({ open, onOpenChange, examId, subje
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [uploadedResourceId, setUploadedResourceId] = useState<string | null>(null);
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('');
@@ -90,40 +92,7 @@ export default function UploadResourceDialog({ open, onOpenChange, examId, subje
       
       const resource = res.data;
       setIsUploading(false);
-      setIsProcessing(true);
-      setProcessingStatus('Starting document extraction...');
-      
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-      const eventSource = new EventSource(`${apiUrl}/api/v1/resources/${resource.id}/events`);
-      
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        setProcessingStatus(data.message || data.status);
-        setProcessingProgress(data.progress * 100);
-        
-        if (["READY", "FAILED"].includes(data.status)) {
-            eventSource.close();
-            if (data.status === "READY") {
-                notify.success('Processing complete', 'Document is ready for generation.');
-            } else {
-                notify.error('Processing failed', data.message);
-            }
-            queryClient.invalidateQueries({ queryKey: ['resources', examId, subjectId, folderId] });
-            setFile(null);
-            setIsProcessing(false);
-            onOpenChange(false);
-        }
-      };
-      
-      eventSource.onerror = () => {
-          // If connection fails, assume background task is still going and let them close.
-          eventSource.close();
-          queryClient.invalidateQueries({ queryKey: ['resources', examId, subjectId, folderId] });
-          notify.info('Upload complete', 'Document processing in background.');
-          setFile(null);
-          setIsProcessing(false);
-          onOpenChange(false);
-      };
+      setUploadedResourceId(resource.id);
       
     } catch (err: any) {
       const msg = err.response?.data?.detail || 'Failed to upload file';
@@ -131,6 +100,12 @@ export default function UploadResourceDialog({ open, onOpenChange, examId, subje
       setIsUploading(false);
       setProgress(0);
     }
+  };
+
+  const handleProcessingComplete = () => {
+    setFile(null);
+    setUploadedResourceId(null);
+    onOpenChange(false);
   };
 
   const onDragOver = (e: React.DragEvent) => {
@@ -180,106 +155,103 @@ export default function UploadResourceDialog({ open, onOpenChange, examId, subje
           </div>
         </div>
         
-        <div 
-          className={`relative py-10 flex flex-col items-center justify-center border-2 border-dashed rounded-xl transition-colors duration-200 ${isDragOver ? 'border-primary bg-primary/5' : 'border-muted-foreground/20 hover:border-primary/50 bg-card'}`}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-        >
-          {!file ? (
-            <>
-              <div className="p-4 rounded-full bg-primary/10 mb-4">
-                <UploadCloudIcon className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="font-medium text-lg mb-1">Drag and drop your file here</h3>
-              <p className="text-sm text-muted-foreground mb-6">Supports PDF, DOCX, TXT. Max 50MB.</p>
-              
-              <Button 
-                variant="outline" 
-                disabled={isUploading || isProcessing}
-                onClick={() => fileInputRef.current?.click()}
-                className="bg-background shadow-sm hover:bg-muted"
-              >
-                Browse Files
-              </Button>
-            </>
-          ) : (
-            <div className="w-full px-6">
-              <div className="flex items-center p-4 bg-background border rounded-xl shadow-sm">
-                <div className="p-2 bg-blue-100 rounded-lg mr-4">
-                  <FileIcon className="w-6 h-6 text-blue-600 shrink-0" />
+        {!uploadedResourceId ? (
+          <div 
+            className={`relative py-10 flex flex-col items-center justify-center border-2 border-dashed rounded-xl transition-colors duration-200 ${isDragOver ? 'border-primary bg-primary/5' : 'border-muted-foreground/20 hover:border-primary/50 bg-card'}`}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+          >
+            {!file ? (
+              <>
+                <div className="p-4 rounded-full bg-primary/10 mb-4">
+                  <UploadCloudIcon className="w-8 h-8 text-primary" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate text-foreground">{file.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                <h3 className="font-medium text-lg mb-1">Drag and drop your file here</h3>
+                <p className="text-sm text-muted-foreground mb-6">Supports PDF, DOCX, TXT. Max 50MB.</p>
+                
+                <Button 
+                  variant="outline" 
+                  disabled={isUploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-background shadow-sm hover:bg-muted"
+                >
+                  Browse Files
+                </Button>
+              </>
+            ) : (
+              <div className="w-full px-6">
+                <div className="flex items-center p-4 bg-background border rounded-xl shadow-sm">
+                  <div className="p-2 bg-blue-100 rounded-lg mr-4">
+                    <FileIcon className="w-6 h-6 text-blue-600 shrink-0" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate text-foreground">{file.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                  {!isUploading && (
+                    <Button variant="ghost" size="icon" className="shrink-0 ml-2 rounded-full h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setFile(null)}>
+                      <XIcon className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
-                {!isUploading && !isProcessing && (
-                  <Button variant="ghost" size="icon" className="shrink-0 ml-2 rounded-full h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setFile(null)}>
-                    <XIcon className="w-4 h-4" />
-                  </Button>
+                
+                {isUploading && (
+                  <div className="mt-5 space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center font-medium text-primary">
+                        <Loader2Icon className="w-3.5 h-3.5 mr-2 animate-spin" /> Uploading securely...
+                      </span>
+                      <span className="text-muted-foreground font-medium">{progress}%</span>
+                    </div>
+                    <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-primary transition-all duration-300 ease-out" 
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
-              
-              {isUploading && (
-                <div className="mt-5 space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="flex items-center font-medium text-primary">
-                      <Loader2Icon className="w-3.5 h-3.5 mr-2 animate-spin" /> Uploading securely...
-                    </span>
-                    <span className="text-muted-foreground font-medium">{progress}%</span>
-                  </div>
-                  <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-primary transition-all duration-300 ease-out" 
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-              
-              {isProcessing && (
-                <div className="mt-5 space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="flex items-center font-medium text-blue-600">
-                      <Loader2Icon className="w-3.5 h-3.5 mr-2 animate-spin" /> {processingStatus}
-                    </span>
-                    <span className="text-muted-foreground font-medium">{Math.round(processingProgress)}%</span>
-                  </div>
-                  <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-blue-500 transition-all duration-300 ease-out" 
-                      style={{ width: `${processingProgress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+            )}
 
-          <input 
-            type="file" 
-            className="hidden" 
-            ref={fileInputRef}
-            accept=".pdf,.docx,.doc,.txt"
-            onChange={(e) => {
-              if (e.target.files && e.target.files.length > 0) {
-                setFile(e.target.files[0]);
-              }
-            }}
-            disabled={isUploading || isProcessing}
-          />
-        </div>
+            <input 
+              type="file" 
+              className="hidden" 
+              ref={fileInputRef}
+              accept=".pdf,.docx,.doc,.txt"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  setFile(e.target.files[0]);
+                }
+              }}
+              disabled={isUploading}
+            />
+          </div>
+        ) : (
+          <div className="mt-4 w-full">
+            <ResourceProgressTerminal
+              resourceId={uploadedResourceId}
+              examId={examId!}
+              subjectId={subjectId!}
+              folderId={folderId}
+              onComplete={handleProcessingComplete}
+            />
+          </div>
+        )}
         
-        <DialogFooter className="sm:justify-between mt-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isUploading || isProcessing}>Cancel</Button>
-          <Button 
-            onClick={handleUpload} 
-            disabled={!file || isUploading || isProcessing}
-            className="px-8 shadow-sm"
-          >
-            {isUploading ? "Uploading..." : isProcessing ? "Processing..." : "Upload Document"}
-          </Button>
-        </DialogFooter>
+        {!uploadedResourceId && (
+          <DialogFooter className="sm:justify-between mt-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isUploading}>Cancel</Button>
+            <Button 
+              onClick={handleUpload} 
+              disabled={!file || isUploading}
+              className="px-8 shadow-sm"
+            >
+              {isUploading ? "Uploading..." : "Upload Document"}
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
