@@ -41,7 +41,8 @@ async def process_pattern_background(pattern_id: UUID):
         
         sid = str(pattern_id)
         try:
-            await event_bus.publish(sid, GenerationEvent(
+            await event_bus.publish(GenerationEvent(
+                resource_id=pattern_id,
                 status="ANALYZING",
                 event_type="INITIALIZING",
                 message="Initializing pattern analysis...",
@@ -50,7 +51,8 @@ async def process_pattern_background(pattern_id: UUID):
             
             supabase = get_supabase_service_client()
             
-            await event_bus.publish(sid, GenerationEvent(
+            await event_bus.publish(GenerationEvent(
+                resource_id=pattern_id,
                 status="ANALYZING",
                 event_type="EXTRACTING",
                 message="Downloading and extracting document...",
@@ -71,7 +73,8 @@ async def process_pattern_background(pattern_id: UUID):
                 logger.error(f"Failed to extract text from pattern {pattern.id}")
                 pattern.status = PatternStatus.FAILED
                 await db.commit()
-                await event_bus.publish(sid, GenerationEvent(
+                await event_bus.publish(GenerationEvent(
+                    resource_id=pattern_id,
                     status="FAILED",
                     event_type="EXTRACTION_FAILED",
                     message="Failed to extract text from the document.",
@@ -79,7 +82,8 @@ async def process_pattern_background(pattern_id: UUID):
                 ))
                 return
 
-            await event_bus.publish(sid, GenerationEvent(
+            await event_bus.publish(GenerationEvent(
+                resource_id=pattern_id,
                 status="ANALYZING",
                 event_type="ANALYZING",
                 message="Analyzing exam pattern and structure using AI...",
@@ -90,7 +94,8 @@ async def process_pattern_background(pattern_id: UUID):
             if analysis_data and (analysis_data.question_count > 0 or analysis_data.total_marks > 0 or len(analysis_data.sections) > 0):
                 pattern.analysis_data = analysis_data.model_dump()
                 
-                await event_bus.publish(sid, GenerationEvent(
+                await event_bus.publish(GenerationEvent(
+                    resource_id=pattern_id,
                     status="ANALYZING",
                     event_type="EXTRACTING",
                     message="Extracting representative sample questions...",
@@ -99,7 +104,8 @@ async def process_pattern_background(pattern_id: UUID):
                 # Output B - Extract and embed representative questions
                 questions = await extract_pattern_questions(pattern, text_content)
                 if questions:
-                    await event_bus.publish(sid, GenerationEvent(
+                    await event_bus.publish(GenerationEvent(
+                        resource_id=pattern_id,
                         status="ANALYZING",
                         event_type="EMBEDDING",
                         message=f"Generating embeddings for {len(questions)} sample questions...",
@@ -128,7 +134,8 @@ async def process_pattern_background(pattern_id: UUID):
                         db.add_all(chunks_to_add)
 
                 pattern.status = PatternStatus.ACTIVE
-                await event_bus.publish(sid, GenerationEvent(
+                await event_bus.publish(GenerationEvent(
+                    resource_id=pattern_id,
                     status="READY",
                     event_type="ANALYSIS_COMPLETED",
                     message="Pattern analysis completed successfully.",
@@ -138,7 +145,8 @@ async def process_pattern_background(pattern_id: UUID):
                 pattern.status = PatternStatus.FAILED
                 if analysis_data:
                     pattern.analysis_data = analysis_data.model_dump()
-                await event_bus.publish(sid, GenerationEvent(
+                await event_bus.publish(GenerationEvent(
+                    resource_id=pattern_id,
                     status="FAILED",
                     event_type="ANALYSIS_FAILED",
                     message="Failed to identify exam structure. Please upload a valid sample paper.",
@@ -148,7 +156,8 @@ async def process_pattern_background(pattern_id: UUID):
         except Exception as e:
             logger.error(f"Pattern background processing failed: {e}")
             pattern.status = PatternStatus.FAILED
-            await event_bus.publish(sid, GenerationEvent(
+            await event_bus.publish(GenerationEvent(
+                resource_id=pattern_id,
                 status="FAILED",
                 event_type="ERROR",
                 message=f"An unexpected error occurred: {str(e)}",
@@ -328,14 +337,6 @@ async def delete_pattern(
     
     return None
 
-async def pattern_event_stream(pattern_id: UUID):
-    sid = str(pattern_id)
-    try:
-        async for event in event_bus.subscribe(sid):
-            yield f"data: {event.model_dump_json()}\n\n"
-    except asyncio.CancelledError:
-        event_bus.unsubscribe(sid)
-
 @router.get("/patterns/{pattern_id}/events")
 async def stream_pattern_events(
     pattern_id: UUID,
@@ -344,8 +345,9 @@ async def stream_pattern_events(
 ):
     await require_view_access(db, "pattern", pattern_id, UUID(user_id))
     
+    from app.services.generation.events import event_stream
     return StreamingResponse(
-        pattern_event_stream(pattern_id), 
+        event_stream(pattern_id), 
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
