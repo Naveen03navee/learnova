@@ -89,6 +89,8 @@ You must NOT generate questions that are semantically identical or extremely sim
 1. ONLY test conceptual knowledge, problem-solving, or factual understanding of the ACADEMIC SUBJECT ({subject_name}).
 2. NEVER ask meta-questions about the reference material itself. You are strictly FORBIDDEN from asking about authors, book titles, editions, publishers, publication years, bibliography, or any structural metadata found in the KNOWLEDGE_CONTEXT.
 3. If the context only contains metadata (like a bibliography or title page) and lacks academic content to formulate a valid question for {subject_name}, you MUST FAIL rather than generating a question about the metadata.
+4. The question MUST be perfectly self-contained. DO NOT reference specific examples, figures, tables, or sections from the source text (e.g., NEVER say 'According to Example 1.6', 'As shown in Figure 2.3', 'In the text provided', or 'Based on the material'). The question must make complete sense to a student who has not read the specific reference text.
+5. DO NOT use LaTeX math formatting (like \\(\\), $$, \\times, \\cdot, etc). The platform DOES NOT support LaTeX rendering. You MUST use standard Unicode characters for all math, symbols, and formulas (e.g., use '×' instead of '\\times', use '·' instead of '\\cdot', use 'r²' instead of 'r^2', use '10⁹' instead of '10^9', use 'α' instead of '\\alpha'). Write formulas out cleanly as plain text Unicode.
 [/EXPLICIT_CONSTRAINTS]
 """
     return prompt
