@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,7 @@ interface SharePermission {
 }
 
 interface ShareDialogProps {
-  entityType: "exam" | "resource" | "pattern" | "question" | "paper";
+  entityType: "exam" | "resource" | "pattern" | "question" | "paper" | "subject";
   entityId: string;
   trigger?: React.ReactElement | null;
   open?: boolean;
@@ -26,7 +26,14 @@ interface ShareDialogProps {
 export function ShareDialog({ entityType, entityId, trigger, open: controlledOpen, onOpenChange: controlledOnOpenChange }: ShareDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
-  const setOpen = controlledOnOpenChange || setInternalOpen;
+  
+  const setOpen = (newOpen: boolean) => {
+    console.log("ShareDialog setOpen called:", newOpen);
+    if (controlledOnOpenChange) {
+      controlledOnOpenChange(newOpen);
+    }
+    setInternalOpen(newOpen);
+  };
   
   const [shares, setShares] = useState<SharePermission[]>([]);
   const [loading, setLoading] = useState(false);
@@ -97,16 +104,17 @@ export function ShareDialog({ entityType, entityId, trigger, open: controlledOpe
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger !== null && (
-        <DialogTrigger 
-          render={
-            trigger || (
-              <Button variant="outline" size="sm" className="h-8 gap-1">
-                <Share2 className="h-4 w-4" />
-                <span>Share</span>
-              </Button>
-            )
-          }
-        />
+        trigger ? (
+          React.cloneElement(trigger as React.ReactElement<any>, { 
+            onClick: (e: any) => { (trigger as React.ReactElement<any>).props.onClick?.(e); setOpen(true); },
+            onSelect: (e: any) => { (trigger as React.ReactElement<any>).props.onSelect?.(e); setOpen(true); }
+          } as any)
+        ) : (
+          <Button variant="outline" size="sm" className="h-8 gap-1" onClick={() => setOpen(true)}>
+            <Share2 className="h-4 w-4" />
+            <span>Share</span>
+          </Button>
+        )
       )}
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>

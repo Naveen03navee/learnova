@@ -60,16 +60,6 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
     }
   });
   
-  const handleDownload = async (resource: any) => {
-    try {
-      const res = await api.get(`/api/v1/resources/${resource.id}/download`);
-      if (res.data?.download_url) {
-        window.open(res.data.download_url, '_blank');
-      }
-    } catch (err: any) {
-      notify.error('Download failed', err.response?.data?.detail || "Failed to download file");
-    }
-  };
 
   const retryMut = useMutation({
     mutationFn: async (id: string) => {
@@ -177,18 +167,7 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
                   </DropdownMenuItem>
                 )}
                 
-                {resource.access?.has_view && (
-                  <DropdownMenuItem onClick={() => handleDownload(resource)}>
-                    <DownloadIcon className="w-4 h-4 mr-2" /> Download File
-                  </DropdownMenuItem>
-                )}
-                
-                {resource.access?.level === 'OWNER' && !resource.access?.is_global && (
-                  <DropdownMenuItem onSelect={() => setShareOpenId(resource.id)}>
-                    <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
-                  </DropdownMenuItem>
-                )}
-                
+
                 {resource.access?.has_edit && (
                   <DropdownMenuItem className="text-red-600" onClick={() => {
                     if (confirm(`Delete file "${resource.name}"? This will permanently delete it and its associated processed knowledge data.`)) {
@@ -205,10 +184,6 @@ export default function ResourceList({ examId, subjectId, folderId }: ResourceLi
               <ShareDialog 
                 entityType="resource" 
                 entityId={resource.id} 
-                open={shareOpenId === resource.id}
-                onOpenChange={(isOpen) => {
-                  if (!isOpen) setShareOpenId(null);
-                }}
               />
             )}
           </div>

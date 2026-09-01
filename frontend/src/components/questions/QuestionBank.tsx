@@ -19,7 +19,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Share2 as ShareDialogIcon, MoreVerticalIcon } from 'lucide-react';
+import { Share2 as ShareDialogIcon, MoreVerticalIcon, CheckSquare, Square, Users } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export function QuestionBank() {
   const { examId, subjectId } = useWorkspaceStore();
@@ -30,13 +33,20 @@ export function QuestionBank() {
   const [editingQuestion, setEditingQuestion] = useState<any>(null);
   const [shareOpenId, setShareOpenId] = useState<string | null>(null);
   
+  // Bulk Selection State
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkShareOpen, setBulkShareOpen] = useState(false);
+  const [bulkShareEmail, setBulkShareEmail] = useState("");
+  const [bulkShareLevel, setBulkShareLevel] = useState<"VIEW" | "EDIT">("VIEW");
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  
   const queryClient = useQueryClient();
   const notify = useNotificationStore(s => s.notify);
 
   const { data: questions = [], isLoading } = useQuery({
     queryKey: ["questions", examId, subjectId, searchQuery],
     queryFn: async () => {
-      let url = "/api/v1/questions?";
+      let url = "/api/v1/questions?limit=500&";
       if (examId) url += `exam_id=${examId}&`;
       if (subjectId) url += `subject_id=${subjectId}&`;
       if (searchQuery) url += `q=${encodeURIComponent(searchQuery)}&`;
@@ -66,6 +76,42 @@ export function QuestionBank() {
     setIsDialogOpen(true);
   };
 
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.length === questions.length && questions.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(questions.filter((q: any) => q.access?.level === 'OWNER').map((q: any) => q.id));
+    }
+  };
+
+  const handleBulkShare = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkShareEmail || selectedIds.length === 0) return;
+    setBulkSubmitting(true);
+    try {
+      await Promise.all(selectedIds.map(id => 
+        api.post("/api/v1/shares", {
+          entity_type: "question",
+          entity_id: id,
+          shared_with_email: bulkShareEmail,
+          permission_level: bulkShareLevel
+        })
+      ));
+      notify.success(`Shared ${selectedIds.length} questions with ${bulkShareEmail}`);
+      setBulkShareOpen(false);
+      setBulkShareEmail("");
+      setSelectedIds([]);
+    } catch(err: any) {
+      notify.error("Failed to share questions", err.response?.data?.detail || err.message);
+    } finally {
+      setBulkSubmitting(false);
+    }
+  };
+
   if (!examId || !subjectId) {
     return (
       <Alert variant="default" className="bg-amber-50 text-amber-800 border-amber-200 m-8 max-w-2xl">
@@ -92,10 +138,75 @@ export function QuestionBank() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <Button onClick={openCreateDialog} className="shrink-0 bg-blue-600 hover:bg-blue-700">
-          <Plus className="h-4 w-4 mr-2" />
-          Create Question
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedIds.length > 0 && (
+            <>
+              <Button onClick={() => setBulkShareOpen(true)} variant="secondary" className="shrink-0 bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200 border">
+                <ShareDialogIcon className="h-4 w-4 mr-2" />
+                Share {selectedIds.length} Selected
+              </Button>
+              <Dialog open={bulkShareOpen} onOpenChange={setBulkShareOpen}>
+                <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Share Selected Questions</DialogTitle>
+                  <DialogDescription>Grant access to {selectedIds.length} questions.</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleBulkShare} className="flex flex-col gap-4 mt-4">
+                  <Input 
+                    placeholder="Teacher's email address" 
+                    type="email" 
+                    value={bulkShareEmail}
+                    onChange={e => setBulkShareEmail(e.target.value)}
+                    required
+                  />
+                  <Select value={bulkShareLevel} onValueChange={(val: any) => setBulkShareLevel(val)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="VIEW">View</SelectItem>
+                      <SelectItem value="EDIT">Edit</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button type="submit" disabled={bulkSubmitting || !bulkShareEmail}>
+                    {bulkSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Share Questions"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+            </>
+          )}
+
+          <ShareDialog 
+            entityType="subject" 
+            entityId={subjectId} 
+            trigger={
+              <Button variant="outline" className="shrink-0 border-blue-200 hover:bg-blue-50">
+                <Users className="h-4 w-4 mr-2 text-blue-600" />
+                Share Entire Subject
+              </Button>
+            }
+          />
+          <Button onClick={openCreateDialog} className="shrink-0 bg-blue-600 hover:bg-blue-700">
+            <Plus className="h-4 w-4 mr-2" />
+            Create Question
+          </Button>
+        </div>
+      </div>
+      
+      <div className="flex items-center justify-between px-2">
+        {questions.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Checkbox 
+              id="select-all" 
+              checked={selectedIds.length === questions.length && questions.length > 0} 
+              onCheckedChange={toggleAll}
+            />
+            <label htmlFor="select-all" className="text-sm text-muted-foreground font-medium cursor-pointer">
+              Select All Owned Questions
+            </label>
+          </div>
+        )}
       </div>
       
       <div className="flex-1 overflow-auto space-y-4 pb-10">
@@ -108,10 +219,16 @@ export function QuestionBank() {
         )}
 
         {questions.map((q: any) => (
-          <Card key={q.id}>
+          <Card key={q.id} className={selectedIds.includes(q.id) ? "border-blue-300 bg-blue-50/10" : ""}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-muted-foreground font-medium flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-3">
+                  {q.access?.level === 'OWNER' && (
+                    <Checkbox 
+                      checked={selectedIds.includes(q.id)} 
+                      onCheckedChange={() => toggleSelection(q.id)}
+                    />
+                  )}
                   <span>{q.question_type} • {q.difficulty} • {q.marks} Marks</span>
                   <AccessBadge access={q.access} />
                 </div>
@@ -128,12 +245,6 @@ export function QuestionBank() {
                         </DropdownMenuItem>
                       )}
                       
-                      {q.access?.level === 'OWNER' && !q.access?.is_global && (
-                        <DropdownMenuItem onSelect={() => setShareOpenId(q.id)}>
-                          <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
-                        </DropdownMenuItem>
-                      )}
-                      
                       {q.access?.level === 'OWNER' && (
                         <DropdownMenuItem className="text-red-600" onClick={() => { if(confirm("Delete this question?")) deleteMutation.mutate(q.id) }}>
                           <Trash2 className="w-4 h-4 mr-2" /> Delete
@@ -146,10 +257,6 @@ export function QuestionBank() {
                     <ShareDialog 
                       entityType="question" 
                       entityId={q.id} 
-                      open={shareOpenId === q.id}
-                      onOpenChange={(isOpen) => {
-                        if (!isOpen) setShareOpenId(null);
-                      }}
                     />
                   )}
                 </div>

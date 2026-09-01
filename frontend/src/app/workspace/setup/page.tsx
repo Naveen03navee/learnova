@@ -10,10 +10,12 @@ import { Button } from '@/components/ui/button';
 import { CreateExamDialog } from '@/components/workspace/CreateExamDialog';
 import { CreateSubjectDialog } from '@/components/workspace/CreateSubjectDialog';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { BookOpen, FolderOpen, ChevronRight } from 'lucide-react';
+import { BookOpen, FolderOpen, ChevronRight, Share2 as ShareDialogIcon, Users } from 'lucide-react';
+import { AccessBadge } from '@/components/sharing/AccessBadge';
+import { ShareDialog } from '@/components/sharing/ShareDialog';
 
-type Exam = { id: string; name: string; is_college: boolean; exam_type: string; description?: string; created_at: string };
-type Subject = { id: string; exam_id: string; name: string; code?: string; description?: string; created_at: string };
+type Exam = { id: string; name: string; is_college: boolean; exam_type: string; description?: string; created_at: string; access?: any };
+type Subject = { id: string; exam_id: string; name: string; code?: string; description?: string; created_at: string; access?: any };
 
 export default function WorkspaceSetupPage() {
   const router = useRouter();
@@ -99,12 +101,25 @@ export default function WorkspaceSetupPage() {
                 onClick={() => setExamId(exam.id)}
               >
                 <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg">{exam.name}</CardTitle>
-                    {exam.exam_type && (
-                      <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full font-medium">
-                        {exam.exam_type}
-                      </span>
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg">{exam.name}</CardTitle>
+                        <AccessBadge access={exam.access} />
+                      </div>
+                      {exam.exam_type && (
+                        <span className="inline-block text-xs px-2 py-1 bg-primary/10 text-primary rounded-full font-medium">
+                          {exam.exam_type}
+                        </span>
+                      )}
+                    </div>
+                    {exam.access?.level === 'OWNER' && !exam.access?.is_global && (
+                      <div onClick={e => e.stopPropagation()}>
+                        <ShareDialog 
+                          entityType="exam" 
+                          entityId={exam.id}
+                        />
+                      </div>
                     )}
                   </div>
                   {exam.description && (
@@ -157,15 +172,28 @@ export default function WorkspaceSetupPage() {
                 >
                   <CardHeader className="py-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-md flex items-center">
-                          {subject.name}
-                        </CardTitle>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <CardTitle className="text-md flex items-center">
+                            {subject.name}
+                          </CardTitle>
+                          <AccessBadge access={subject.access} />
+                        </div>
                         {subject.code && (
-                          <CardDescription className="text-xs mt-1">Code: {subject.code}</CardDescription>
+                          <CardDescription className="text-xs">Code: {subject.code}</CardDescription>
                         )}
                       </div>
-                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      <div className="flex items-center gap-3">
+                        {subject.access?.level === 'OWNER' && !subject.access?.is_global && (
+                          <div onClick={e => e.stopPropagation()}>
+                            <ShareDialog 
+                              entityType="subject" 
+                              entityId={subject.id}
+                            />
+                          </div>
+                        )}
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      </div>
                     </div>
                   </CardHeader>
                 </Card>

@@ -39,7 +39,13 @@ async def get_subjects(
     sp = SharePermission
     query = (
         select(Subject)
-        .outerjoin(sp, and_(sp.entity_type == 'subject', sp.entity_id == Subject.id, sp.shared_with_id == user_uuid))
+        .outerjoin(sp, and_(
+            sp.shared_with_id == user_uuid,
+            or_(
+                and_(sp.entity_type == 'subject', sp.entity_id == Subject.id),
+                and_(sp.entity_type == 'exam', sp.entity_id == exam_id)
+            )
+        ))
         .where(
             Subject.exam_id == exam_id,
             or_(Subject.created_by == user_uuid, sp.id != None)

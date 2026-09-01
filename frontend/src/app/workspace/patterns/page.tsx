@@ -26,7 +26,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+// Removed ScrollArea import
 import { AccessBadge } from "@/components/sharing/AccessBadge";
 import { ShareDialog } from "@/components/sharing/ShareDialog";
 import {
@@ -67,7 +67,7 @@ function PatternPreviewDialog({ patternId }: { patternId: string }) {
         <DialogHeader>
           <DialogTitle>Extracted Representative Questions</DialogTitle>
         </DialogHeader>
-        <ScrollArea className="flex-1 pr-4">
+        <div className="flex-1 pr-4 overflow-y-auto">
           {isLoading ? (
             <div className="p-4 text-center text-muted-foreground">Loading...</div>
           ) : chunks?.length === 0 ? (
@@ -82,12 +82,14 @@ function PatternPreviewDialog({ patternId }: { patternId: string }) {
                     {chunk.difficulty && <Badge variant="secondary">{chunk.difficulty}</Badge>}
                     {chunk.marks && <Badge variant="secondary">{chunk.marks} Marks</Badge>}
                   </div>
-                  <pre className="text-sm whitespace-pre-wrap font-sans mt-2">{chunk.content}</pre>
+                  <pre className="text-sm whitespace-pre-wrap font-sans mt-2">
+                    {chunk.content.replace(/(?<!\n)\s*(\([A-Ea-e]\)|\b[A-Ea-e]\.)/g, '\n$1').trim()}
+                  </pre>
                 </div>
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -271,12 +273,6 @@ export default function PatternsPage() {
                             <MoreVerticalIcon className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {pattern.access?.level === 'OWNER' && !pattern.access?.is_global && (
-                              <DropdownMenuItem onSelect={() => setShareOpenId(pattern.id)}>
-                                <ShareDialogIcon className="w-4 h-4 mr-2" /> Share
-                              </DropdownMenuItem>
-                            )}
-                            
                             {pattern.access?.has_edit && (
                               <DropdownMenuItem className="text-red-600" onClick={() => setDeleteConfirmId(pattern.id)}>
                                 <Trash2 className="w-4 h-4 mr-2" /> Delete
@@ -289,10 +285,6 @@ export default function PatternsPage() {
                           <ShareDialog 
                             entityType="pattern" 
                             entityId={pattern.id} 
-                            open={shareOpenId === pattern.id}
-                            onOpenChange={(isOpen) => {
-                              if (!isOpen) setShareOpenId(null);
-                            }}
                           />
                         )}
                       </div>

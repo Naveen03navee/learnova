@@ -48,7 +48,15 @@ async def get_metrics(
         func.sum(GenerationSession.duplicate_count),
         func.sum(GenerationSession.invalid_count),
         func.sum(GenerationSession.repair_count)
-    ).join(Subject, GenerationSession.subject_id == Subject.id).where(Subject.created_by == user_uuid)
+    ).join(Subject, GenerationSession.subject_id == Subject.id).outerjoin(
+        SharePermission, and_(
+            SharePermission.shared_with_id == user_uuid,
+            or_(
+                and_(SharePermission.entity_type == "subject", SharePermission.entity_id == Subject.id),
+                and_(SharePermission.entity_type == "exam", SharePermission.entity_id == Subject.exam_id)
+            )
+        )
+    ).where(or_(Subject.created_by == user_uuid, SharePermission.id != None))
     
     if exam_id:
         gen_query = gen_query.where(GenerationSession.exam_id == exam_id)
@@ -91,7 +99,15 @@ async def get_metrics(
     # Question Bank Metrics
     q_query = select(GeneratedQuestion.approval_status, func.count(GeneratedQuestion.id)).join(
         GenerationSession, GeneratedQuestion.session_id == GenerationSession.id
-    ).join(Subject, GenerationSession.subject_id == Subject.id).where(Subject.created_by == user_uuid)
+    ).join(Subject, GenerationSession.subject_id == Subject.id).outerjoin(
+        SharePermission, and_(
+            SharePermission.shared_with_id == user_uuid,
+            or_(
+                and_(SharePermission.entity_type == "subject", SharePermission.entity_id == Subject.id),
+                and_(SharePermission.entity_type == "exam", SharePermission.entity_id == Subject.exam_id)
+            )
+        )
+    ).where(or_(Subject.created_by == user_uuid, SharePermission.id != None))
     
     if exam_id:
         q_query = q_query.where(GenerationSession.exam_id == exam_id)
@@ -124,9 +140,11 @@ async def get_metrics(
         Subject, QuestionPaper.subject_id == Subject.id
     ).outerjoin(
         SharePermission, and_(
-            SharePermission.entity_id == QuestionPaper.id,
-            SharePermission.entity_type == "paper",
-            SharePermission.shared_with_id == user_uuid
+            SharePermission.shared_with_id == user_uuid,
+            or_(
+                and_(SharePermission.entity_type == "paper", SharePermission.entity_id == QuestionPaper.id),
+                and_(SharePermission.entity_type == "exam", SharePermission.entity_id == QuestionPaper.exam_id)
+            )
         )
     ).where(
         or_(
@@ -184,7 +202,15 @@ async def get_activity(
     # 1. Fetch recent generation sessions
     gen_q = select(GenerationSession).join(
         Subject, GenerationSession.subject_id == Subject.id
-    ).where(Subject.created_by == user_uuid).order_by(GenerationSession.created_at.desc()).limit(limit)
+    ).outerjoin(
+        SharePermission, and_(
+            SharePermission.shared_with_id == user_uuid,
+            or_(
+                and_(SharePermission.entity_type == "subject", SharePermission.entity_id == Subject.id),
+                and_(SharePermission.entity_type == "exam", SharePermission.entity_id == Subject.exam_id)
+            )
+        )
+    ).where(or_(Subject.created_by == user_uuid, SharePermission.id != None)).order_by(GenerationSession.created_at.desc()).limit(limit)
     
     if exam_id:
         gen_q = gen_q.where(GenerationSession.exam_id == exam_id)
@@ -208,9 +234,11 @@ async def get_activity(
         Subject, QuestionPaper.subject_id == Subject.id
     ).outerjoin(
         SharePermission, and_(
-            SharePermission.entity_id == QuestionPaper.id,
-            SharePermission.entity_type == "paper",
-            SharePermission.shared_with_id == user_uuid
+            SharePermission.shared_with_id == user_uuid,
+            or_(
+                and_(SharePermission.entity_type == "paper", SharePermission.entity_id == QuestionPaper.id),
+                and_(SharePermission.entity_type == "exam", SharePermission.entity_id == QuestionPaper.exam_id)
+            )
         )
     ).where(
         or_(

@@ -117,7 +117,8 @@ async def extract_pattern_questions(pattern: ExamPattern, text_content: str) -> 
             system_prompt="""
 You are an expert exam parser.
 Extract complete representative questions from the provided document.
-CRITICAL INSTRUCTION: Preserve the COMPLETE question text including all multiple-choice options (A, B, C, D, etc.), statements, or parts. Do NOT arbitrarily split text.
+CRITICAL INSTRUCTION 1: Preserve the COMPLETE question text including all multiple-choice options (A, B, C, D, etc.), statements, or parts. Do NOT arbitrarily split text.
+CRITICAL INSTRUCTION 2: If a question has multiple choice options, you MUST format it with newlines before each option to ensure readability. (For example, insert a newline before "(A)", "(B)", "(C)", "(D)").
 Return a structured list of questions.
 """,
             user_prompt=user_prompt,

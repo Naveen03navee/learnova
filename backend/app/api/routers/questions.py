@@ -24,7 +24,7 @@ async def list_questions(
     difficulty: Optional[str] = None,
     question_type: Optional[str] = None,
     skip: int = 0,
-    limit: int = Query(50, le=100),
+    limit: int = Query(50, le=500),
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
@@ -37,9 +37,11 @@ async def list_questions(
         
         query = select(Question).join(Subject, Question.subject_id == Subject.id).outerjoin(
             SharePermission, and_(
-                SharePermission.entity_id == Question.id,
-                SharePermission.entity_type == "question",
-                SharePermission.shared_with_id == user_uuid
+                SharePermission.shared_with_id == user_uuid,
+                or_(
+                    and_(SharePermission.entity_type == "question", SharePermission.entity_id == Question.id),
+                    and_(SharePermission.entity_type == "exam", SharePermission.entity_id == Question.exam_id)
+                )
             )
         )
         
@@ -51,9 +53,11 @@ async def list_questions(
     else:
         query = select(Question).join(Subject, Question.subject_id == Subject.id).outerjoin(
             SharePermission, and_(
-                SharePermission.entity_id == Question.id,
-                SharePermission.entity_type == "question",
-                SharePermission.shared_with_id == user_uuid
+                SharePermission.shared_with_id == user_uuid,
+                or_(
+                    and_(SharePermission.entity_type == "question", SharePermission.entity_id == Question.id),
+                    and_(SharePermission.entity_type == "exam", SharePermission.entity_id == Question.exam_id)
+                )
             )
         ).order_by(desc(Question.created_at))
         

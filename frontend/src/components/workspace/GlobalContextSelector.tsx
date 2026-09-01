@@ -163,10 +163,19 @@ export function GlobalContextSelector() {
                   </SelectItem>
                 ))
               ) : (
-                <SelectItem value="none" disabled>
+                <div className="py-2 px-2 text-sm text-muted-foreground text-center">
                   No subjects found
-                </SelectItem>
+                </div>
               )}
+              <div className="border-t p-1 mt-1">
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start text-xs h-8" 
+                  onClick={() => router.push('/workspace/setup')}
+                >
+                  <Settings className="w-3 h-3 mr-2" /> Setup Context
+                </Button>
+              </div>
             </SelectContent>
           </Select>
           

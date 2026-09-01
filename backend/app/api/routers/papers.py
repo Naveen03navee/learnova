@@ -75,9 +75,11 @@ async def list_papers(
     
     query = select(QuestionPaper).options(selectinload(QuestionPaper.items)).join(Exam, QuestionPaper.exam_id == Exam.id).join(Subject, QuestionPaper.subject_id == Subject.id).outerjoin(
         SharePermission, and_(
-            SharePermission.entity_id == QuestionPaper.id,
-            SharePermission.entity_type == "paper",
-            SharePermission.shared_with_id == user_uuid
+            SharePermission.shared_with_id == user_uuid,
+            or_(
+                and_(SharePermission.entity_type == "paper", SharePermission.entity_id == QuestionPaper.id),
+                and_(SharePermission.entity_type == "exam", SharePermission.entity_id == QuestionPaper.exam_id)
+            )
         )
     ).where(
         or_(

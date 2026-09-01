@@ -246,9 +246,11 @@ async def list_patterns(
         chunk_count_sq, ExamPattern.id == chunk_count_sq.c.pattern_id
     ).join(Exam, ExamPattern.exam_id == Exam.id).join(Subject, ExamPattern.subject_id == Subject.id).outerjoin(
         SharePermission, and_(
-            SharePermission.entity_id == ExamPattern.id,
-            SharePermission.entity_type == "pattern",
-            SharePermission.shared_with_id == user_uuid
+            SharePermission.shared_with_id == user_uuid,
+            or_(
+                and_(SharePermission.entity_type == "pattern", SharePermission.entity_id == ExamPattern.id),
+                and_(SharePermission.entity_type == "exam", SharePermission.entity_id == ExamPattern.exam_id)
+            )
         )
     ).where(
         or_(

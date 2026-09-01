@@ -127,6 +127,24 @@ async def get_entity_access(db: AsyncSession, entity_type: str, entity_id: UUID,
             access["level"] = "EDIT"
         else:
             access["level"] = "VIEW"
+    elif entity_type != "exam" and exam_id:
+        # Check if the parent exam is shared
+        exam_share_result = await db.execute(
+            select(SharePermission).where(
+                SharePermission.entity_type == "exam",
+                SharePermission.entity_id == exam_id,
+                SharePermission.shared_with_id == user_id
+            )
+        )
+        exam_share = exam_share_result.scalar_one_or_none()
+        if exam_share:
+            access["is_shared"] = True
+            access["has_view"] = True
+            if exam_share.permission == SharePermissionLevel.EDIT:
+                access["has_edit"] = True
+                access["level"] = "EDIT"
+            else:
+                access["level"] = "VIEW"
             
     return access
 

@@ -50,9 +50,11 @@ async def get_resources(
             
     base_query = select(Resource).join(Exam, Resource.exam_id == Exam.id).join(Subject, Resource.subject_id == Subject.id).outerjoin(
         SharePermission, and_(
-            SharePermission.entity_id == Resource.id,
-            SharePermission.entity_type == "resource",
-            SharePermission.shared_with_id == user_uuid
+            SharePermission.shared_with_id == user_uuid,
+            or_(
+                and_(SharePermission.entity_type == "resource", SharePermission.entity_id == Resource.id),
+                and_(SharePermission.entity_type == "exam", SharePermission.entity_id == exam_id)
+            )
         )
     ).where(
         Resource.exam_id == exam_id,
